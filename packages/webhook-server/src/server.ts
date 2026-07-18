@@ -32,7 +32,13 @@ export function createWebhookServer(secret = process.env.GITHUB_WEBHOOK_SECRET ?
         return;
       }
       const event = request.headers["x-github-event"];
-      const result = await handleGitHubEvent(typeof event === "string" ? event : undefined, body);
+      const deliveryId = request.headers["x-github-delivery"];
+      const result = await handleGitHubEvent(
+        typeof event === "string" ? event : undefined,
+        body,
+        undefined,
+        typeof deliveryId === "string" ? deliveryId : undefined,
+      );
       response.writeHead(200, { "content-type": "application/json" }).end(`${JSON.stringify(result)}\n`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
