@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
 import type { Convention } from "@ht6/shared";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { publishCommitNotification, repositoryFromRemote, runReviewCheck } from "../src/precommit.js";
+import { loadEnvironmentFile, publishCommitNotification, repositoryFromRemote, runReviewCheck } from "../src/precommit.js";
 
 const convention: Convention = {
   id: "prisma",
@@ -43,6 +43,20 @@ const convention: Convention = {
 it("derives repository slugs from HTTPS and SSH remotes", () => {
   expect(repositoryFromRemote("https://github.com/acme/api.git\n")).toBe("acme/api");
   expect(repositoryFromRemote("git@github.com:acme/api.git")).toBe("acme/api");
+});
+
+it("loads hook configuration on Node versions without process.loadEnvFile", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "engineering-memory-env-"));
+  const variable = "ENGINEERING_MEMORY_TEST_COMPATIBILITY";
+  try {
+    await writeFile(join(directory, ".env"), `${variable}=works\n`, "utf8");
+    delete process.env[variable];
+    await loadEnvironmentFile(join(directory, ".env"));
+    expect(process.env[variable]).toBe("works");
+  } finally {
+    delete process.env[variable];
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 it("blocks a staged diff that violates a high-confidence convention", async () => {

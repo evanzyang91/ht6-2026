@@ -60,11 +60,25 @@ A convention is an executable policy with provenance:
   "languages": ["typescript"],
   "prohibitedSignals": ["prisma.user.findMany"],
   "preferredSignals": ["userService.list"],
+  "detection": {
+    "mode": "forbidden-signal",
+    "semanticDescription": "A controller accesses Prisma directly.",
+    "triggerSignals": [],
+    "forbiddenSignals": ["prisma.user.findMany"],
+    "requiredSignals": [],
+    "matchScope": "line"
+  },
   "confidence": 0.89,
   "supportingEpisodes": ["episode-a", "episode-b"],
   "evidence": [{ "pullRequest": 142, "rejectedCode": "...", "acceptedCode": "..." }]
 }
 ```
+
+Detection is hybrid: `semanticDescription` preserves the broader English condition, while exact
+signals support fast deterministic checks. `triggerSignals` constrain when a forbidden pattern is
+relevant. A `missing-required-signal` rule instead fires when its trigger is present but required
+code is absent. `semantic` rules use the optional model fallback. Older convention records without
+`detection` continue to use their flat `prohibitedSignals` behavior.
 
 Keep confidence separate from severity. Confidence measures whether the convention is real; severity
 describes the cost of violating it and should be added once the team has a reliable taxonomy.
@@ -123,6 +137,12 @@ It does not add defensible value merely generating review prose. Keep determinis
 provenance, storage, scope filters, and AST checks outside Freesolo. Store model version, prompt
 version, input hashes, and output confidence so conventions can be rebuilt and audited. Treat review
 text as untrusted input and isolate it from tool/system instructions.
+
+Runtime selection is backend-only. `ENGINEERING_MEMORY_SEMANTIC_ANALYZER=freesolo` selects the
+OpenAI-compatible Freesolo analyzer for configured extraction; the default remains deterministic.
+Hosted responses cross a strict validation boundary before persistence, calls have bounded
+concurrency/timeouts/retries, and exhausted or invalid calls use the deterministic analyzer unless
+the operator explicitly disables fallback. End users never need the Freesolo credential.
 
 ## 24–36 hour delivery plan
 

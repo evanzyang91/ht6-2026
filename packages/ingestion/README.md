@@ -35,6 +35,10 @@ for the full breakdown:
 - **`"review-summary"`** — a review's overall verdict text (Approve/Request changes/Comment).
 - **`"conversation"`** — general PR conversation-tab comments.
 
+All three are ingested. Extraction currently turns only `"inline"` comments into code-linked review
+episodes; summaries and conversation comments are retained for future PR-level memory but are not
+silently treated as line-level evidence.
+
 All three carry shared PR-level context: repository, PR number, comment id, reviewer, body,
 timestamp, merge commit SHA, PR title, merge timestamp.
 

@@ -1,9 +1,8 @@
 import type { Convention } from "@ht6/shared";
 import { parseAddedLines } from "./parseDiff.js";
-import { detectImportsAndCalls } from "./detectImportsCalls.js";
 import { matchesPathScope } from "./matchPathScope.js";
-import { matchesProhibitedSignal } from "./matchProhibitedSignal.js";
 import { matchesLanguageScope } from "./matchLanguageScope.js";
+import { matchConventionDetection, normalizedDetection } from "./matchConventionDetection.js";
 
 export interface PredictedFeedback {
   conventionId: string;
@@ -13,6 +12,7 @@ export interface PredictedFeedback {
   matchedPath: string;
   matchedLine?: number;
   matchedSignal?: string;
+  detectionMode?: "forbidden-signal" | "missing-required-signal" | "semantic";
   reason: string;
   supportingPRs: number[];
   acceptedExamples: string[];
@@ -33,7 +33,8 @@ export async function validateAgainstDiff(
   const paths = [...new Set(addedLines.map((line) => line.filePath))];
   const findings: PredictedFeedback[] = [];
   for (const convention of conventions) {
-    if (!convention.prohibitedSignals.length) {
+    const detection = normalizedDetection(convention);
+    if (detection.mode === "semantic") {
       if (!options.llmFallback || !await options.llmFallback(convention, diff)) continue;
       const matchedPath = paths.find((path) => matchesPathScope(convention, path) && matchesLanguageScope(convention, path));
       if (!matchedPath) continue;
@@ -44,7 +45,8 @@ export async function validateAgainstDiff(
         supportCount: new Set(convention.evidence.map((item) => item.pullRequest)).size,
         matchedPath,
         matchedLine: addedLines.find((line) => line.filePath === matchedPath)?.lineNumber,
-        reason: "The optional semantic validator identified a likely convention violation.",
+        detectionMode: "semantic",
+        reason: `${detection.semanticDescription} The optional semantic validator identified a likely convention violation.`,
         supportingPRs: [...new Set(convention.evidence.map((item) => item.pullRequest))],
         acceptedExamples: convention.evidence.flatMap((item) => item.acceptedCode ? [item.acceptedCode] : []).slice(0, 3),
       });
@@ -52,21 +54,21 @@ export async function validateAgainstDiff(
     }
     for (const path of paths.filter((filePath) => matchesPathScope(convention, filePath) && matchesLanguageScope(convention, filePath))) {
       const lines = addedLines.filter((line) => line.filePath === path);
-      const signals = detectImportsAndCalls(lines);
-      if (!matchesProhibitedSignal(convention, signals)) continue;
-      const matched = convention.prohibitedSignals.filter((prohibited) =>
-        signals.some((signal) => signal.toLowerCase().includes(prohibited.toLowerCase()))
-      );
-      const matchedAddition = lines.find((line) => matched.some((signal) => line.line.toLowerCase().includes(signal.toLowerCase())));
+      const match = matchConventionDetection(convention, lines);
+      if (!match) continue;
+      const reason = detection.mode === "missing-required-signal"
+        ? `${detection.semanticDescription} Added code matches context ${match.matchedSignals.join(", ")} but is missing required signal${match.missingSignals.length === 1 ? "" : "s"}: ${match.missingSignals.join(", ")}.`
+        : `${detection.semanticDescription} Added code matches a forbidden signal in context: ${match.matchedSignals.join(", ")}.`;
       findings.push({
         conventionId: convention.id,
         rule: convention.rule,
         confidence: convention.confidence,
         supportCount: new Set(convention.evidence.map((item) => item.pullRequest)).size,
         matchedPath: path,
-        matchedLine: matchedAddition?.lineNumber,
-        matchedSignal: matched[0],
-        reason: `Added code matches historically rejected signal${matched.length === 1 ? "" : "s"}: ${matched.join(", ")}.`,
+        matchedLine: match.lineNumber,
+        matchedSignal: match.matchedSignals[0],
+        detectionMode: detection.mode,
+        reason,
         supportingPRs: [...new Set(convention.evidence.map((item) => item.pullRequest))],
         acceptedExamples: convention.evidence.flatMap((item) => item.acceptedCode ? [item.acceptedCode] : []).slice(0, 3),
       });

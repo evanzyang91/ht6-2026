@@ -53,6 +53,7 @@ Serves the persisted conventions to coding agents via two MCP tools:
 - `get_repo_conventions` — hybrid retrieval (repo/path/language scope, text similarity,
   confidence/support ranking) over the convention store.
 - `predict_review_feedback` — validates a supplied diff against conventions (added-line parsing,
-  import/call detection, path scope, prohibited signals) and returns evidence-backed predictions.
+  import/call detection, path scope, contextual forbidden signals, missing required signals, and
+  optional semantic fallback) and returns evidence-backed predictions.
 
 Run: `npm run mcp-server`

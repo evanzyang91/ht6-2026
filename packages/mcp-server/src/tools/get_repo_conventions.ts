@@ -1,3 +1,4 @@
+import type { ConventionDetection } from "@ht6/shared";
 import type { ConventionStore } from "../store/conventionStore.js";
 import { retrieveConventions, type RetrievalQuery } from "../retrieval/index.js";
 
@@ -13,6 +14,7 @@ export interface RepoConventionResult {
   supportingPRs: number[];
   prohibitedSignals: string[];
   preferredSignals: string[];
+  detection?: ConventionDetection;
   acceptedExamples: string[];
 }
 
@@ -30,6 +32,7 @@ export async function getRepoConventions(store: ConventionStore, input: Retrieva
     supportingPRs: [...new Set(convention.evidence.map((evidence) => evidence.pullRequest))],
     prohibitedSignals: convention.prohibitedSignals,
     preferredSignals: convention.preferredSignals,
+    detection: convention.detection,
     acceptedExamples: convention.evidence.flatMap((evidence) => evidence.acceptedCode ? [evidence.acceptedCode] : []).slice(0, 3),
   }));
 }

@@ -1,4 +1,4 @@
-import type { CommentIntent, ReviewEpisode } from "@ht6/shared";
+import type { CommentIntent, ConventionDetection, ReviewCodeContext, ReviewEpisode } from "@ht6/shared";
 
 /** Factual evidence presented to a semantic processor. */
 export interface SemanticInput {
@@ -8,6 +8,7 @@ export interface SemanticInput {
   reviewComment: string;
   rejectedCode: string;
   acceptedCode?: string;
+  codeContext?: ReviewCodeContext;
 }
 
 /** Normalized meaning used to cluster episodes and compile conventions. */
@@ -18,6 +19,7 @@ export interface SemanticAnalysis {
   rationale: string;
   prohibitedSignals: string[];
   preferredSignals: string[];
+  detection?: ConventionDetection;
 }
 
 /**
@@ -44,6 +46,6 @@ export function semanticInputFromEpisode(episode: ReviewEpisode): SemanticInput 
     reviewComment: episode.reviewComment,
     rejectedCode: episode.rejectedCode,
     acceptedCode: episode.acceptedCode,
+    codeContext: episode.codeContext,
   };
 }
-

@@ -31,3 +31,52 @@ it("supports an injected semantic fallback for conventions without executable si
   const findings = await validateAgainstDiff([semanticOnly], diff, { llmFallback: async () => true });
   expect(findings[0].reason).toContain("semantic validator");
 });
+
+it("flags a forbidden signal only when its code context is present", async () => {
+  const contextual: Convention = {
+    ...memory,
+    id: "logged-token",
+    rule: "Tokens must not be logged",
+    prohibitedSignals: ["token"],
+    detection: {
+      mode: "forbidden-signal",
+      semanticDescription: "An access token is passed to a logger.",
+      triggerSignals: ["logger.debug"],
+      forbiddenSignals: ["token"],
+      requiredSignals: [],
+      matchScope: "line",
+    },
+  };
+  const violation = "+++ b/src/controllers/user.ts\n@@ -1 +1 @@\n+logger.debug('issued', { token });";
+  const unrelated = "+++ b/src/controllers/user.ts\n@@ -1 +1 @@\n+return token;";
+  expect((await validateAgainstDiff([contextual], violation))[0]).toMatchObject({
+    detectionMode: "forbidden-signal",
+    matchedLine: 1,
+  });
+  expect(await validateAgainstDiff([contextual], unrelated)).toEqual([]);
+});
+
+it("flags a contextual rule when its required signal is missing", async () => {
+  const authorization: Convention = {
+    ...memory,
+    id: "admin-auth",
+    rule: "Admin endpoints must apply requireAdmin",
+    pathScopes: ["src/routes/**"],
+    prohibitedSignals: [],
+    preferredSignals: ["requireAdmin"],
+    detection: {
+      mode: "missing-required-signal",
+      semanticDescription: "An admin endpoint is defined without admin authorization.",
+      triggerSignals: ["adminController"],
+      forbiddenSignals: [],
+      requiredSignals: ["requireAdmin"],
+      matchScope: "line",
+    },
+  };
+  const violation = "+++ b/src/routes/admin.ts\n@@ -1 +1 @@\n+router.get('/admin', adminController);";
+  const compliant = "+++ b/src/routes/admin.ts\n@@ -1 +1 @@\n+router.get('/admin', requireAdmin, adminController);";
+  const finding = (await validateAgainstDiff([authorization], violation))[0];
+  expect(finding).toMatchObject({ detectionMode: "missing-required-signal", matchedSignal: "adminController" });
+  expect(finding.reason).toContain("missing required signal: requireAdmin");
+  expect(await validateAgainstDiff([authorization], compliant)).toEqual([]);
+});
