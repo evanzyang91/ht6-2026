@@ -1,7 +1,12 @@
 import * as vscode from "vscode";
 import { isAbsolute, join, resolve } from "node:path";
-import type { PredictedFeedback } from "@ht6/mcp-server/api" with { "resolution-mode": "import" };
-import { applySafeguards, type SafeguardSettings } from "./safeguards.js";
+import type {
+  EngineeringMemorySnapshot,
+  MemoryInitializationResult,
+  PredictedFeedback,
+  RepositoryMemoryInspection,
+} from "@ht6/mcp-server/api" with { "resolution-mode": "import" };
+import { applySafeguards, diagnoseSafeguards, type SafeguardSettings } from "./safeguards.js";
 import { diffForFile, repositoryForWorkspace, stagedDiff } from "./git.js";
 import { shouldShowPopup, type PopupRecord } from "./popupPolicy.js";
 
@@ -18,6 +23,38 @@ async function validateMemory(repository: string, diff: string, dataDirectory: s
   return validateRepositoryDiff(repository, diff, { dataDirectory });
 }
 
+async function loadMemory(repository: string, dataDirectory: string): Promise<EngineeringMemorySnapshot> {
+  const { loadRepositoryMemory } = await import("@ht6/mcp-server/api");
+  return loadRepositoryMemory(repository, { dataDirectory });
+}
+
+async function inspectMemory(repository: string, dataDirectory: string): Promise<RepositoryMemoryInspection> {
+  const { inspectRepositoryMemory } = await import("@ht6/mcp-server/api");
+  return inspectRepositoryMemory(repository, { dataDirectory });
+}
+
+async function initializeMemory(
+  repository: string,
+  token: string,
+  dataDirectory: string,
+  limit: number,
+  onProgress: (message: string) => void,
+): Promise<MemoryInitializationResult> {
+  const { initializeRepositoryMemory } = await import("@ht6/mcp-server/api");
+  return initializeRepositoryMemory(repository, {
+    token,
+    dataDirectory,
+    limit,
+    onProgress: (progress) => onProgress(progress.message),
+  });
+}
+
+interface WorkspaceContext {
+  root: string;
+  repository: string;
+  dataDirectory: string;
+}
+
 class MemoryController implements vscode.Disposable {
   private readonly diagnostics = vscode.languages.createDiagnosticCollection("engineering-memory");
   private readonly output = vscode.window.createOutputChannel(SOURCE);
@@ -25,6 +62,7 @@ class MemoryController implements vscode.Disposable {
   private readonly timers = new Map<string, NodeJS.Timeout>();
   private readonly findings = new Map<string, PredictedFeedback>();
   private readonly popupHistory = new Map<string, PopupRecord>();
+  private readonly initializationPrompts = new Set<string>();
   private commitWatchers: vscode.Disposable[] = [];
 
   constructor(private readonly context: vscode.ExtensionContext) {
@@ -41,17 +79,27 @@ class MemoryController implements vscode.Disposable {
       vscode.workspace.onDidSaveTextDocument((document) => this.scheduleDocument(document)),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("engineeringMemory.dataDirectory")) this.setupCommitWatchers();
-        if (event.affectsConfiguration("engineeringMemory")) void this.validateCurrentFile();
+        if (event.affectsConfiguration("engineeringMemory")) {
+          void this.validateCurrentFile();
+          void this.checkRepositoryInitialization();
+        }
       }),
-      vscode.workspace.onDidChangeWorkspaceFolders(() => this.setupCommitWatchers()),
+      vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        this.setupCommitWatchers();
+        void this.checkRepositoryInitialization();
+      }),
       vscode.commands.registerCommand("engineeringMemory.validateCurrentFile", () => this.validateCurrentFile()),
       vscode.commands.registerCommand("engineeringMemory.validateStagedChanges", () => this.validateStagedChanges()),
+      vscode.commands.registerCommand("engineeringMemory.diagnoseCurrentFile", () => this.diagnoseCurrentFile()),
+      vscode.commands.registerCommand("engineeringMemory.showCurrentMemory", () => this.showCurrentMemory()),
+      vscode.commands.registerCommand("engineeringMemory.initializeRepository", () => this.initializeRepository()),
       vscode.commands.registerCommand("engineeringMemory.showEvidence", (finding: PredictedFeedback) => this.showEvidence(finding)),
       vscode.commands.registerCommand("engineeringMemory.muteConvention", (finding: PredictedFeedback) => this.muteConvention(finding)),
       vscode.languages.registerCodeActionsProvider({ scheme: "file" }, {
         provideCodeActions: (_document, _range, context) => this.codeActions(context.diagnostics),
       }, { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
     );
+    void this.checkRepositoryInitialization();
   }
 
   dispose(): void {
@@ -99,13 +147,118 @@ class MemoryController implements vscode.Disposable {
     if (!vscode.workspace.isTrusted || document.uri.scheme !== "file") return undefined;
     const folder = vscode.workspace.getWorkspaceFolder(document.uri);
     if (!folder) return undefined;
+    return this.contextForFolder(folder);
+  }
+
+  private async contextForFolder(folder: vscode.WorkspaceFolder): Promise<WorkspaceContext> {
     const root = folder.uri.fsPath;
     const configuredRepository = this.configuration().get<string>("repository", "").trim();
     const repository = configuredRepository || await repositoryForWorkspace(root);
     if (!repository) throw new Error("Cannot infer owner/repository from the origin remote");
     const configuredData = this.configuration().get<string>("dataDirectory", "").trim();
-    const dataDirectory = configuredData ? (isAbsolute(configuredData) ? configuredData : resolve(root, configuredData)) : join(root, "data");
+    const dataDirectory = configuredData
+      ? (isAbsolute(configuredData) ? configuredData : resolve(root, configuredData))
+      : this.context.globalStorageUri.fsPath;
     return { root, repository, dataDirectory };
+  }
+
+  private async checkRepositoryInitialization(): Promise<void> {
+    const folder = this.commandFolder();
+    if (!folder || !vscode.workspace.isTrusted) return;
+    try {
+      const context = await this.contextForFolder(folder);
+      const inspection = await inspectMemory(context.repository, context.dataDirectory);
+      if (inspection.status === "ready") {
+        this.status.text = `$(shield) Memory: ${inspection.conventionCount} conventions`;
+        this.status.command = "engineeringMemory.showCurrentMemory";
+        return;
+      }
+      if (inspection.status === "stale") {
+        this.status.text = "$(sync~spin) Memory refreshing";
+        await loadMemory(context.repository, context.dataDirectory);
+        await this.checkRepositoryInitialization();
+        return;
+      }
+      if (inspection.status === "empty") {
+        this.status.text = "$(shield) Memory: processed, no conventions";
+        this.status.command = "engineeringMemory.showCurrentMemory";
+        return;
+      }
+
+      this.status.text = inspection.status === "failed"
+        ? "$(error) Memory setup failed"
+        : "$(cloud-download) Memory: set up";
+      this.status.command = "engineeringMemory.initializeRepository";
+      if (this.initializationPrompts.has(context.repository)) return;
+      this.initializationPrompts.add(context.repository);
+      const message = inspection.status === "failed"
+        ? `Engineering Memory could not initialize ${context.repository}. Retry GitHub setup?`
+        : `Engineering Memory has not indexed ${context.repository} yet.`;
+      const selected = await vscode.window.showInformationMessage(
+        message,
+        inspection.status === "failed" ? "Retry" : "Initialize Memory",
+        "Not Now",
+      );
+      if (selected === "Initialize Memory" || selected === "Retry") await this.initializeRepository();
+    } catch (error) {
+      this.status.text = "$(cloud-download) Memory: setup needed";
+      this.status.command = "engineeringMemory.initializeRepository";
+      this.output.appendLine(`[${new Date().toISOString()}] Setup detection: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  async initializeRepository(): Promise<void> {
+    const folder = this.commandFolder();
+    if (!folder || !vscode.workspace.isTrusted) {
+      await vscode.window.showInformationMessage("Open and trust a Git repository before initializing Engineering Memory.");
+      return;
+    }
+    try {
+      const context = await this.contextForFolder(folder);
+      const session = await vscode.authentication.getSession("github", ["repo"], {
+        createIfNone: {
+          detail: `Engineering Memory needs read access to review history for ${context.repository}.`,
+        },
+      });
+      const limit = this.configuration().get("historyLimit", 75);
+      this.status.text = "$(sync~spin) Memory initializing";
+      const result = await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Initializing Engineering Memory for ${context.repository}`,
+        cancellable: false,
+      }, async (progress) => initializeMemory(
+        context.repository,
+        session.accessToken,
+        context.dataDirectory,
+        limit,
+        (message) => progress.report({ message }),
+      ));
+      this.status.text = result.conventionCount
+        ? `$(shield) Memory: ${result.conventionCount} conventions`
+        : "$(shield) Memory: processed, no conventions";
+      this.status.command = "engineeringMemory.showCurrentMemory";
+      const selected = await vscode.window.showInformationMessage(
+        result.conventionCount
+          ? `Engineering Memory learned ${result.conventionCount} conventions from ${result.commentCount} review comments.`
+          : `Engineering Memory processed ${result.commentCount} review comments but found no repeated conventions yet.`,
+        "Show Memory",
+      );
+      if (selected === "Show Memory") await this.showCurrentMemory();
+    } catch (error) {
+      this.reportError(error);
+      this.status.text = "$(error) Memory setup failed";
+      this.status.command = "engineeringMemory.initializeRepository";
+      const selected = await vscode.window.showErrorMessage(
+        `Engineering Memory setup failed: ${error instanceof Error ? error.message : String(error)}`,
+        "View Details",
+      );
+      if (selected === "View Details") this.output.show(true);
+    }
+  }
+
+  private commandFolder(): vscode.WorkspaceFolder | undefined {
+    const document = vscode.window.activeTextEditor?.document;
+    return document ? vscode.workspace.getWorkspaceFolder(document.uri) : vscode.workspace.workspaceFolders?.[0];
   }
 
   private async validateDocument(document: vscode.TextDocument): Promise<void> {
@@ -170,6 +323,116 @@ class MemoryController implements vscode.Disposable {
     }
   }
 
+  async diagnoseCurrentFile(): Promise<void> {
+    const document = vscode.window.activeTextEditor?.document;
+    if (!document) {
+      await vscode.window.showInformationMessage("Open a file to diagnose Engineering Memory validation.");
+      return;
+    }
+    this.output.clear();
+    this.output.appendLine("Engineering Memory — current file diagnosis");
+    this.output.appendLine("============================================");
+    try {
+      const context = await this.contextForDocument(document);
+      if (!context) {
+        this.output.appendLine(`Workspace trusted: ${vscode.workspace.isTrusted ? "yes" : "no"}`);
+        this.output.appendLine("Validation unavailable: the file is not in a trusted file workspace.");
+        this.output.show(true);
+        return;
+      }
+      const diff = await diffForFile(context.root, document.uri.fsPath, document.getText());
+      const result = await validateMemory(context.repository, diff, context.dataDirectory);
+      const settings = this.safeguardSettings();
+      const safeguardResult = diagnoseSafeguards(result.findings, settings);
+      const path = diffPath(context.root, document.uri.fsPath);
+      const eligibleForFile = safeguardResult.findings.filter((finding) => finding.matchedPath === path);
+
+      this.output.appendLine(`Extension active: yes`);
+      this.output.appendLine(`Workspace trusted: yes`);
+      this.output.appendLine(`Repository: ${context.repository}`);
+      this.output.appendLine(`Data directory: ${context.dataDirectory}`);
+      this.output.appendLine(`File: ${path}`);
+      this.output.appendLine(`Git diff detected: ${diff.trim() ? "yes" : "no"}`);
+      this.output.appendLine(`Added lines inspected: ${countAddedLines(diff)}`);
+      this.output.appendLine(`Compiled repository conventions: ${result.conventionCount}`);
+      this.output.appendLine(`Deterministic scope/signal matches: ${result.findings.length}`);
+      this.output.appendLine(`Eligible warnings for this file: ${eligibleForFile.length}`);
+      this.output.appendLine("");
+      this.output.appendLine("Safeguard filtering");
+      this.output.appendLine(`  Below confidence ${settings.minimumConfidence}: ${safeguardResult.diagnostics.belowConfidence}`);
+      this.output.appendLine(`  Below ${settings.minimumPullRequestSupport}-PR support: ${safeguardResult.diagnostics.insufficientSupport}`);
+      this.output.appendLine(`  Muted: ${safeguardResult.diagnostics.muted}`);
+      this.output.appendLine(`  Duplicate: ${safeguardResult.diagnostics.duplicates}`);
+      this.output.appendLine(`  Over per-file cap: ${safeguardResult.diagnostics.overFileLimit}`);
+
+      if (result.findings.length) {
+        this.output.appendLine("");
+        this.output.appendLine("Raw deterministic matches");
+        for (const finding of result.findings) {
+          this.output.appendLine(`  - ${finding.matchedPath}:${finding.matchedLine ?? "?"} — ${finding.rule}`);
+          this.output.appendLine(`    Signal: ${finding.matchedSignal}; confidence: ${finding.confidence}; support: ${finding.supportCount} PRs`);
+        }
+      } else {
+        this.output.appendLine("");
+        this.output.appendLine(result.conventionCount
+          ? "No changed line matched a stored convention's path, language, and prohibited signal."
+          : "No conventions were loaded for the configured repository.");
+      }
+      this.status.text = eligibleForFile.length
+        ? `$(warning) Memory ${eligibleForFile.length}`
+        : "$(shield-check) Memory diagnosed";
+      this.output.show(true);
+    } catch (error) {
+      this.reportError(error);
+      this.output.show(true);
+    }
+  }
+
+  async showCurrentMemory(): Promise<void> {
+    const folder = this.commandFolder();
+    if (!folder || !vscode.workspace.isTrusted) {
+      await vscode.window.showInformationMessage("Open and trust a workspace to inspect Engineering Memory.");
+      return;
+    }
+    this.output.clear();
+    this.output.appendLine("Engineering Memory — current repository memory");
+    this.output.appendLine("==============================================");
+    try {
+      const context = await this.contextForFolder(folder);
+      const snapshot = await loadMemory(context.repository, context.dataDirectory);
+      const conventions = [...snapshot.conventions].sort(
+        (left, right) => right.confidence - left.confidence || right.supportingEpisodes.length - left.supportingEpisodes.length
+      );
+      this.output.appendLine(`Repository: ${snapshot.repository}`);
+      this.output.appendLine(`Data directory: ${context.dataDirectory}`);
+      this.output.appendLine(`Conventions loaded: ${conventions.length}`);
+      if (!conventions.length) {
+        this.output.appendLine("");
+        this.output.appendLine("No compiled conventions exist for this repository.");
+      }
+      conventions.forEach((convention, index) => {
+        const pullRequests = [...new Set(convention.evidence.map((item) => item.pullRequest))];
+        this.output.appendLine("");
+        this.output.appendLine(`${index + 1}. ${convention.title}`);
+        this.output.appendLine(`   Rule: ${convention.rule}`);
+        this.output.appendLine(`   Category: ${convention.category}`);
+        this.output.appendLine(`   Confidence: ${Math.round(convention.confidence * 100)}%`);
+        this.output.appendLine(`   Scope: ${convention.pathScopes.join(", ") || "all paths"}`);
+        this.output.appendLine(`   Languages: ${convention.languages.join(", ") || "all"}`);
+        this.output.appendLine(`   Prohibited signals: ${convention.prohibitedSignals.join(", ") || "none (semantic only)"}`);
+        this.output.appendLine(`   Preferred signals: ${convention.preferredSignals.join(", ") || "none"}`);
+        this.output.appendLine(`   Supporting PRs: ${pullRequests.map((number) => `#${number}`).join(", ") || "none"}`);
+      });
+      this.status.text = conventions.length
+        ? `$(shield) Memory: ${conventions.length} conventions`
+        : "$(shield) Memory: no data";
+      this.output.show(true);
+    } catch (error) {
+      this.reportError(error);
+      this.output.show(true);
+    }
+  }
+
   private publish(uri: vscode.Uri, values: PredictedFeedback[], document?: vscode.TextDocument): void {
     const diagnostics = values.map((finding) => {
       this.findings.set(finding.conventionId, finding);
@@ -219,17 +482,20 @@ class MemoryController implements vscode.Disposable {
     this.commitWatchers = [];
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
       const configuredData = this.configuration().get<string>("dataDirectory", "").trim();
-      const dataDirectory = configuredData
+      const memoryDirectory = configuredData
         ? (isAbsolute(configuredData) ? configuredData : resolve(folder.uri.fsPath, configuredData))
-        : join(folder.uri.fsPath, "data");
-      const watcher = vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(dataDirectory, "commit-review.json"),
-      );
-      this.commitWatchers.push(
-        watcher,
-        watcher.onDidCreate((uri) => void this.handleCommitReview(uri, folder)),
-        watcher.onDidChange((uri) => void this.handleCommitReview(uri, folder)),
-      );
+        : this.context.globalStorageUri.fsPath;
+      const directories = new Set([memoryDirectory, join(folder.uri.fsPath, "data")]);
+      for (const dataDirectory of directories) {
+        const watcher = vscode.workspace.createFileSystemWatcher(
+          new vscode.RelativePattern(dataDirectory, "commit-review.json"),
+        );
+        this.commitWatchers.push(
+          watcher,
+          watcher.onDidCreate((uri) => void this.handleCommitReview(uri, folder)),
+          watcher.onDidChange((uri) => void this.handleCommitReview(uri, folder)),
+        );
+      }
     }
   }
 
@@ -292,6 +558,10 @@ class MemoryController implements vscode.Disposable {
 
 function diffPath(root: string, absolutePath: string): string {
   return absolutePath.slice(root.length + 1).replaceAll("\\", "/");
+}
+
+function countAddedLines(diff: string): number {
+  return diff.split("\n").filter((line) => line.startsWith("+") && !line.startsWith("+++")).length;
 }
 
 export function activate(context: vscode.ExtensionContext): void {

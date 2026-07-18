@@ -7,6 +7,7 @@ export interface RepositoryPipelineState {
   lastIngestedAt?: string;
   lastExtractedAt?: string;
   lastMergedPullRequest?: number;
+  lastError?: string;
 }
 
 export type PipelineState = Record<string, RepositoryPipelineState>;
@@ -51,6 +52,7 @@ export async function markRepositoryIngested(
     ingestionVersion: changed ? current.ingestionVersion + 1 : current.ingestionVersion,
     lastIngestedAt: new Date().toISOString(),
     lastMergedPullRequest: pullRequest,
+    lastError: undefined,
   };
   await savePipelineState(state, dataDirectory);
 }
@@ -68,7 +70,19 @@ export async function markRepositoriesExtracted(versions: Record<string, number>
       ...current,
       extractionVersion: Math.max(current.extractionVersion, version),
       lastExtractedAt: extractedAt,
+      lastError: undefined,
     };
   }
+  await savePipelineState(state, dataDirectory);
+}
+
+export async function markRepositoryMemoryFailed(
+  repository: string,
+  error: string,
+  dataDirectory?: string,
+): Promise<void> {
+  const state = await loadPipelineState(dataDirectory);
+  const current = state[repository] ?? { ingestionVersion: 0, extractionVersion: 0 };
+  state[repository] = { ...current, lastError: error };
   await savePipelineState(state, dataDirectory);
 }

@@ -18,6 +18,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ht6/extraction": "*",
+    "@ht6/ingestion": "*",
     "@ht6/shared": "*",
     "@ht6/pipeline": "*",
     "@modelcontextprotocol/sdk": "^1.0.0",

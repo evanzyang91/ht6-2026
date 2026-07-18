@@ -32,6 +32,18 @@
         "title": "Engineering Memory: Validate Staged Changes"
       },
       {
+        "command": "engineeringMemory.diagnoseCurrentFile",
+        "title": "Engineering Memory: Diagnose Current File"
+      },
+      {
+        "command": "engineeringMemory.showCurrentMemory",
+        "title": "Engineering Memory: Show Current Memory"
+      },
+      {
+        "command": "engineeringMemory.initializeRepository",
+        "title": "Engineering Memory: Initialize Repository Memory"
+      },
+      {
         "command": "engineeringMemory.showEvidence",
         "title": "Engineering Memory: Show Evidence"
       },
@@ -56,7 +68,14 @@
         "engineeringMemory.dataDirectory": {
           "type": "string",
           "default": "",
-          "description": "Engineering Memory data directory. Defaults to <workspace>/data."
+          "description": "Engineering Memory data directory. Defaults to private extension storage."
+        },
+        "engineeringMemory.historyLimit": {
+          "type": "integer",
+          "default": 75,
+          "minimum": 5,
+          "maximum": 250,
+          "description": "Maximum recent merged pull requests fetched during repository initialization."
         },
         "engineeringMemory.minimumConfidence": {
           "type": "number",
