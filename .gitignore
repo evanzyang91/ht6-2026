@@ -8,6 +8,7 @@ data/*
 
 .env
 .env.local
+packages/extraction/src/generated/
 *.sqlite
 *.sqlite3
 

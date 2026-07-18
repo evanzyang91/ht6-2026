@@ -12,13 +12,18 @@ import { fileURLToPath } from "node:url";
 import { extractComments } from "./extract.js";
 import { DeterministicSemanticAnalyzer } from "./semantic/deterministicSemanticAnalyzer.js";
 import type { SemanticAnalyzer } from "./semantic/types.js";
+import type { ExtractionPublisher } from "./storage/types.js";
+import { createPrismaExtractionPublisher } from "./storage/prismaExtractionPublisher.js";
 
 export interface ExtractionResult {
   episodeCount: number;
   conventionCount: number;
   semanticProvider: string;
   semanticVersion: string;
+  publishedRepositoryCount: number;
 }
+
+export const EXTRACTION_PIPELINE_VERSION = "1";
 
 function defaultDataDirectory(): string {
   const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
@@ -28,7 +33,8 @@ function defaultDataDirectory(): string {
 /** Rebuilds derived memory atomically from the persisted raw-review snapshot. */
 export async function runExtraction(
   dataDirectory = defaultDataDirectory(),
-  analyzer: SemanticAnalyzer = new DeterministicSemanticAnalyzer()
+  analyzer: SemanticAnalyzer = new DeterministicSemanticAnalyzer(),
+  publisher?: ExtractionPublisher
 ): Promise<ExtractionResult> {
   const dataDir = resolve(dataDirectory);
   const parsed: unknown = JSON.parse(await readFile(resolve(dataDir, RAW_COMMENTS_FILE), "utf8"));
@@ -52,10 +58,35 @@ export async function runExtraction(
     await rename(temp, target);
   }
 
+  const publication = await publisher?.publish({
+    comments,
+    episodes,
+    conventions,
+    analyzerProvider: analyzer.provider,
+    analyzerVersion: analyzer.version,
+    extractorVersion: EXTRACTION_PIPELINE_VERSION,
+  });
+
   return {
     episodeCount: episodes.length,
     conventionCount: conventions.length,
     semanticProvider: analyzer.provider,
     semanticVersion: analyzer.version,
+    publishedRepositoryCount: publication?.repositoryCount ?? 0,
   };
+}
+
+/** Runs extraction with the environment-configured database publisher when available. */
+export async function runConfiguredExtraction(
+  dataDirectory?: string,
+  analyzer: SemanticAnalyzer = new DeterministicSemanticAnalyzer(),
+): Promise<ExtractionResult> {
+  const publisher = process.env.DATABASE_URL
+    ? createPrismaExtractionPublisher(process.env.DATABASE_URL)
+    : undefined;
+  try {
+    return await runExtraction(dataDirectory, analyzer, publisher);
+  } finally {
+    await publisher?.close();
+  }
 }

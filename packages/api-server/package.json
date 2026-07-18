@@ -1,0 +1,19 @@
+{
+  "name": "@ht6/api-server",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "tsx src/server.ts",
+    "test": "vitest run --root ../.. packages/api-server/tests"
+  },
+  "dependencies": {
+    "@ht6/mcp-server": "*",
+    "@ht6/shared": "*",
+    "dotenv": "^17.4.2",
+    "graphql": "^16.11.0",
+    "graphql-yoga": "^5.16.2"
+  }
+}

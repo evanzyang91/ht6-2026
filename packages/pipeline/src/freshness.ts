@@ -1,4 +1,4 @@
-import { runExtraction } from "@ht6/extraction";
+import { runConfiguredExtraction } from "@ht6/extraction";
 import { loadPipelineState, markRepositoriesExtracted } from "./state.js";
 
 let activeRefresh: Promise<void> | undefined;
@@ -17,7 +17,7 @@ export async function ensureMemoryFresh(repository: string, dataDirectory = proc
       .filter(([, item]) => item.extractionVersion < item.ingestionVersion)
       .map(([slug, item]) => [slug, item.ingestionVersion]));
     activeRefresh = (async () => {
-      await runExtraction(dataDirectory);
+      await runConfiguredExtraction(dataDirectory);
       await markRepositoriesExtracted(staleVersions, dataDirectory);
     })().finally(() => { activeRefresh = undefined; });
     await activeRefresh;

@@ -35,15 +35,19 @@ not executed.
 
 ```bash
 npm install
+npm run db:setup
+npm run api-server
 npm run vscode:build
 npm run hooks:install
 ```
 
 Open the repository in VS Code, select **Run and Debug**, and launch **Engineering Memory Extension**.
 The repository slug is inferred from `origin` unless explicitly configured. On first use, the
-extension offers **Initialize Memory**, signs in through VS Code's built-in GitHub authentication,
-backfills merged PR review history, and compiles conventions into private extension storage. Tokens
-remain managed by VS Code and are never written to the workspace or extension settings.
+extension offers **Initialize Memory** and signs in through VS Code's built-in GitHub authentication.
+The token is sent only as a bearer credential to the configured Engineering Memory GraphQL API,
+which verifies repository access, backfills review history, and publishes conventions. Tokens remain
+managed by VS Code and are never written to the workspace or extension settings. Set
+`engineeringMemory.apiUrl` to an empty string only when testing the legacy local-JSON fallback.
 
 Commands:
 
@@ -87,7 +91,7 @@ hook, the gate can be bypassed with `git commit --no-verify`; enforce the same c
 
 ## Current limitations
 
-- Local JSON memory only; no hosted authenticated service yet.
+- The API verifies GitHub repository access but does not yet issue its own short-lived application session.
 - Requires Git and a repository `origin` unless configured manually.
 - Deterministic imports/calls/signals only; subjective conventions need AST or semantic validation.
 - A new untracked file is treated as entirely added.

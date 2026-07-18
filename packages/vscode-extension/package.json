@@ -65,6 +65,11 @@
           "default": "",
           "description": "Repository slug (owner/repository). Inferred from origin when empty."
         },
+        "engineeringMemory.apiUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8790/graphql",
+          "description": "Engineering Memory GraphQL endpoint. Set to empty to use legacy local JSON memory."
+        },
         "engineeringMemory.dataDirectory": {
           "type": "string",
           "default": "",
