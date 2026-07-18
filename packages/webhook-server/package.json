@@ -1,0 +1,14 @@
+{
+  "name": "@ht6/webhook-server",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@ht6/ingestion": "*"
+  }
+}

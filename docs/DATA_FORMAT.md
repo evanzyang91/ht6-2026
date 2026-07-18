@@ -11,6 +11,7 @@ rather than redefining shapes locally.
 | `data/raw-comments.json`  | `@ht6/ingestion`       | `@ht6/extraction`                 | `RawReviewComment[]`                    |
 | `data/episodes.json`      | `@ht6/extraction`      | `@ht6/extraction` (clustering step) | `ReviewEpisode[]`                     |
 | `data/conventions.json`   | `@ht6/extraction`      | `@ht6/mcp-server`                  | `Convention[]`                          |
+| `data/pipeline-state.json`| webhook/pipeline       | `@ht6/pipeline`                    | repository freshness watermarks         |
 
 Each file is a flat JSON array. A relational production target is defined in
 [`schema.sql`](./schema.sql); the JSON boundary remains useful for hackathon parallelism and fixtures.

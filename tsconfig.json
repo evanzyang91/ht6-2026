@@ -2,8 +2,10 @@
   "files": [],
   "references": [
     { "path": "packages/shared" },
-    { "path": "packages/ingestion" },
     { "path": "packages/extraction" },
-    { "path": "packages/mcp-server" }
+    { "path": "packages/pipeline" },
+    { "path": "packages/ingestion" },
+    { "path": "packages/mcp-server" },
+    { "path": "packages/webhook-server" }
   ]
 }

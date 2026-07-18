@@ -2,6 +2,10 @@
 
 Three stages, one owner each, connected by JSON files in `data/` (see [DATA_FORMAT.md](./DATA_FORMAT.md)).
 
+For continuous operation, a verified GitHub webhook ingests only merged PRs. It increments a
+repository ingestion version in `pipeline-state.json`; extraction remains lazy and is run by the
+next essential MCP tool call when that version is newer than the compiled extraction version.
+
 ```
 GitHub repo
     │  (packages/ingestion)
@@ -14,6 +18,15 @@ data/conventions.json       Convention[]
     │  (packages/mcp-server)
     ▼
 MCP tools: conventions, rejected patterns, prediction, explanation, reviewer history
+```
+
+```text
+pull_request.closed + merged=true
+    -> ingestMergedPullRequest(repository, number)
+    -> raw-comments.json + stale pipeline version
+    -> next get_repo_conventions / predict_review_feedback
+    -> ensureMemoryFresh(repository)
+    -> extraction + MCP response
 ```
 
 ## Stage 1 — Ingestion (`@ht6/ingestion`)

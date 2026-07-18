@@ -19,3 +19,10 @@ it("does not flag unrelated code", async () => {
   const diff = "+++ b/src/controllers/user.ts\n+return userService.list();";
   expect(await validateAgainstDiff([memory], diff)).toEqual([]);
 });
+
+it("supports an injected semantic fallback for conventions without executable signals", async () => {
+  const semanticOnly = { ...memory, prohibitedSignals: [] };
+  const diff = "+++ b/src/controllers/user.ts\n+const result = doSomethingNovel();";
+  const findings = await validateAgainstDiff([semanticOnly], diff, { llmFallback: async () => true });
+  expect(findings[0].reason).toContain("semantic validator");
+});

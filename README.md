@@ -14,9 +14,10 @@ stage's internals. See [docs/PIPELINE.md](./docs/PIPELINE.md) for the full data 
 
 | Stage | Package | Owner | Reads | Writes |
 |---|---|---|---|---|
-| 1. Ingestion | [`packages/ingestion`](./packages/ingestion) | GitHub/data | GitHub API | `data/raw-comments.json` |
+| 0. Merge webhook | [`packages/webhook-server`](./packages/webhook-server) | GitHub/data | Merged-PR event | triggers single-PR ingestion |
+| 1. Ingestion | [`packages/ingestion`](./packages/ingestion) | GitHub/data | GitHub API | `data/raw-comments.json`, stale version |
 | 2. Extraction | [`packages/extraction`](./packages/extraction) | Memory compiler | `data/raw-comments.json` | `data/episodes.json`, `data/conventions.json` |
-| 3. Retrieval + MCP | [`packages/mcp-server`](./packages/mcp-server) | Retrieval + MCP | `data/conventions.json` | — (serves MCP tools) |
+| 3. Retrieval + MCP | [`packages/mcp-server`](./packages/mcp-server) | Retrieval + MCP | refreshes stale memory, reads conventions | serves MCP tools |
 
 ## Repo structure
 
@@ -114,7 +115,16 @@ cp .env.example .env   # fill in GITHUB_TOKEN
 npm run ingest -- owner/repository   # stage 1
 npm run extract                      # stage 2
 npm run mcp-server                   # stage 3
+npm run webhook-server               # merge-only GitHub webhook listener
 ```
+
+## Merge-only continuous memory
+
+Configure GitHub's **Pull requests** webhook to send JSON to `/github/webhook`. Only a merged
+`closed` event is ingested; opened, synchronized, and unmerged PRs are ignored. Ingestion marks the
+repository stale but does not extract immediately. The next `get_repo_conventions` or
+`predict_review_feedback` MCP call runs extraction once before serving the request. See
+[`packages/webhook-server/README.md`](./packages/webhook-server/README.md).
 
 See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for the data model, retrieval decisions,
 Freesolo boundary, hackathon scope, and four-person ownership plan. The production relational

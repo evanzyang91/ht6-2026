@@ -4,6 +4,7 @@ import { filterByRepo } from "./filterByRepo.js";
 import { filterByScope } from "./filterByScope.js";
 import { scoreByTextSimilarity } from "./textSimilarity.js";
 import { rankConventions } from "./rank.js";
+import { scoreByEmbeddingSimilarity } from "./embeddings.js";
 
 export interface RetrievalQuery {
   repository: string;
@@ -21,6 +22,9 @@ export async function retrieveConventions(
 ): Promise<Convention[]> {
   const stored = await store.all(query.repository);
   const scoped = filterByScope(filterByRepo(stored, query.repository), query);
-  const scores = scoreByTextSimilarity(scoped, query.query ?? "");
-  return rankConventions(scoped, scores).slice(0, query.limit ?? 20);
+  const textScores = scoreByTextSimilarity(scoped, query.query ?? "");
+  const embeddingScores = query.query && process.env.ENGINEERING_MEMORY_EMBEDDINGS === "local"
+    ? await scoreByEmbeddingSimilarity(scoped, query.query)
+    : new Map<string, number>();
+  return rankConventions(scoped, textScores, embeddingScores).slice(0, query.limit ?? 20);
 }

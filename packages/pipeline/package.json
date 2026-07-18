@@ -1,16 +1,14 @@
 {
-  "name": "@ht6/extraction",
+  "name": "@ht6/pipeline",
   "version": "0.0.1",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc -b",
-    "start": "tsx src/cli.ts",
-    "test": "vitest run"
+    "build": "tsc -b"
   },
   "dependencies": {
-    "@ht6/shared": "*"
+    "@ht6/extraction": "*"
   }
 }

@@ -28,6 +28,10 @@ it("exposes engineering-memory tools over MCP", async () => {
   ]));
   const result = await client.callTool({ name: "get_repo_conventions", arguments: { repository: "acme/api" } });
   expect(result.content).toEqual(expect.arrayContaining([expect.objectContaining({ type: "text" })]));
+  const text = (result.content[0] as { type: "text"; text: string }).text;
+  const payload = JSON.parse(text) as Array<Record<string, unknown>>;
+  expect(payload[0]).toMatchObject({ supportCount: 1, supportingPRs: [7] });
+  expect(payload[0]).not.toHaveProperty("evidence");
   await client.close();
   await server.close();
 });

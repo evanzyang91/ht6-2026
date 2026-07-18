@@ -1,0 +1,63 @@
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+
+export interface RepositoryPipelineState {
+  ingestionVersion: number;
+  extractionVersion: number;
+  lastIngestedAt?: string;
+  lastExtractedAt?: string;
+  lastMergedPullRequest?: number;
+}
+
+export type PipelineState = Record<string, RepositoryPipelineState>;
+
+function statePath(dataDirectory = process.env.DATA_DIR ?? "data"): string {
+  return resolve(dataDirectory, "pipeline-state.json");
+}
+
+export async function loadPipelineState(dataDirectory?: string): Promise<PipelineState> {
+  try {
+    return JSON.parse(await readFile(statePath(dataDirectory), "utf8")) as PipelineState;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw error;
+  }
+}
+
+async function savePipelineState(state: PipelineState, dataDirectory?: string): Promise<void> {
+  const target = statePath(dataDirectory);
+  await mkdir(dirname(target), { recursive: true });
+  const temp = `${target}.${process.pid}.tmp`;
+  await writeFile(temp, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  await rename(temp, target);
+}
+
+export async function markRepositoryIngested(repository: string, pullRequest: number, dataDirectory?: string): Promise<void> {
+  const state = await loadPipelineState(dataDirectory);
+  const current = state[repository] ?? { ingestionVersion: 0, extractionVersion: 0 };
+  state[repository] = {
+    ...current,
+    ingestionVersion: current.ingestionVersion + 1,
+    lastIngestedAt: new Date().toISOString(),
+    lastMergedPullRequest: pullRequest,
+  };
+  await savePipelineState(state, dataDirectory);
+}
+
+export async function markRepositoryExtracted(repository: string, version: number, dataDirectory?: string): Promise<void> {
+  await markRepositoriesExtracted({ [repository]: version }, dataDirectory);
+}
+
+export async function markRepositoriesExtracted(versions: Record<string, number>, dataDirectory?: string): Promise<void> {
+  const state = await loadPipelineState(dataDirectory);
+  const extractedAt = new Date().toISOString();
+  for (const [repository, version] of Object.entries(versions)) {
+    const current = state[repository] ?? { ingestionVersion: version, extractionVersion: 0 };
+    state[repository] = {
+      ...current,
+      extractionVersion: Math.max(current.extractionVersion, version),
+      lastExtractedAt: extractedAt,
+    };
+  }
+  await savePipelineState(state, dataDirectory);
+}

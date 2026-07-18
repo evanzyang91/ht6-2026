@@ -2,6 +2,8 @@ import { z } from "zod/v4";
 import type { ConventionStore } from "../store/conventionStore.js";
 import { getRepoConventions } from "./get_repo_conventions.js";
 import { predictReviewFeedback } from "./predict_review_feedback.js";
+import { retrieveConventions } from "../retrieval/index.js";
+import { ensureMemoryFresh } from "@ht6/pipeline";
 
 const repository = z.string().min(3).describe("GitHub owner/repository slug");
 
@@ -17,24 +19,21 @@ export function createToolDefinitions(store: ConventionStore) {
         query: z.string().optional(),
         limit: z.number().int().min(1).max(50).optional(),
       },
-      run: (input: { repository: string; path?: string; language?: string; query?: string; limit?: number }) =>
-        getRepoConventions(store, input),
+      run: async (input: { repository: string; path?: string; language?: string; query?: string; limit?: number }) => {
+        await ensureMemoryFresh(input.repository);
+        return getRepoConventions(store, input);
+      },
     },
     {
       name: "find_similar_rejected_patterns",
       description: "Find historical rejected/accepted code examples similar to a planned change or snippet.",
       inputSchema: { repository, query: z.string().min(1), path: z.string().optional(), limit: z.number().int().min(1).max(20).optional() },
       run: async (input: { repository: string; query: string; path?: string; limit?: number }) => {
-        const conventions = await getRepoConventions(store, input);
-        return conventions.flatMap((convention) => convention.evidence.map((evidence) => ({
-          conventionId: convention.id,
-          rule: convention.rule,
-          confidence: convention.confidence,
-          pullRequest: evidence.pullRequest,
-          filePath: evidence.filePath,
-          rejectedCode: evidence.rejectedCode,
-          acceptedCode: evidence.acceptedCode,
-          reviewComment: evidence.reviewComment,
+        const ranked = await retrieveConventions(store, input);
+        return ranked.flatMap((convention) => convention.evidence.map((evidence) => ({
+          conventionId: convention.id, rule: convention.rule, confidence: convention.confidence,
+          pullRequest: evidence.pullRequest, filePath: evidence.filePath, rejectedCode: evidence.rejectedCode,
+          acceptedCode: evidence.acceptedCode, reviewComment: evidence.reviewComment,
         }))).slice(0, input.limit ?? 10);
       },
     },
@@ -42,7 +41,10 @@ export function createToolDefinitions(store: ConventionStore) {
       name: "predict_review_feedback",
       description: "Validate a generated unified diff against historical repository conventions.",
       inputSchema: { repository, diff: z.string().min(1) },
-      run: (input: { repository: string; diff: string }) => predictReviewFeedback(store, input),
+      run: async (input: { repository: string; diff: string }) => {
+        await ensureMemoryFresh(input.repository);
+        return predictReviewFeedback(store, input);
+      },
     },
     {
       name: "explain_engineering_decision",
@@ -52,7 +54,7 @@ export function createToolDefinitions(store: ConventionStore) {
         const all = await store.all(input.repository);
         const matches = input.conventionId
           ? all.filter((item) => item.id === input.conventionId)
-          : await getRepoConventions(store, { repository: input.repository, query: input.query, limit: 3 });
+          : await retrieveConventions(store, { repository: input.repository, query: input.query, limit: 3 });
         return matches.map(({ id, title, rule, rationale, confidence, pathScopes, evidence }) => ({
           id, title, rule, rationale, confidence, pathScopes, evidence,
         }));

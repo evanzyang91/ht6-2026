@@ -13,17 +13,35 @@ export interface PredictedFeedback {
   acceptedExamples: string[];
 }
 
+export interface ValidationOptions {
+  llmFallback?: (convention: Convention, diff: string) => Promise<boolean>;
+}
+
 // Orchestrates parseDiff -> detectImportsCalls -> matchPathScope -> matchProhibitedSignal
 // -> (optional) llmFallback. Backs the predict_review_feedback MCP tool.
 export async function validateAgainstDiff(
   conventions: Convention[],
-  diff: string
+  diff: string,
+  options: ValidationOptions = {},
 ): Promise<PredictedFeedback[]> {
   const addedLines = parseAddedLines(diff);
   const paths = [...new Set(addedLines.map((line) => line.filePath))];
   const findings: PredictedFeedback[] = [];
   for (const convention of conventions) {
-    if (!convention.prohibitedSignals.length) continue;
+    if (!convention.prohibitedSignals.length) {
+      if (!options.llmFallback || !await options.llmFallback(convention, diff)) continue;
+      const matchedPath = paths.find((path) => matchesPathScope(convention, path));
+      if (!matchedPath) continue;
+      findings.push({
+        rule: convention.rule,
+        confidence: convention.confidence,
+        matchedPath,
+        reason: "The optional semantic validator identified a likely convention violation.",
+        supportingPRs: [...new Set(convention.evidence.map((item) => item.pullRequest))],
+        acceptedExamples: convention.evidence.flatMap((item) => item.acceptedCode ? [item.acceptedCode] : []).slice(0, 3),
+      });
+      continue;
+    }
     for (const path of paths.filter((filePath) => matchesPathScope(convention, filePath))) {
       const lines = addedLines.filter((line) => line.filePath === path);
       const signals = detectImportsAndCalls(lines);

@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@ht6/shared": "*",
+    "@ht6/pipeline": "*",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "zod": "^3.25.0"
   }

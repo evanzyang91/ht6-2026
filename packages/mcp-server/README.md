@@ -11,12 +11,18 @@ npm run mcp-server
 Reads `data/conventions.json` (`Convention[]`, written by `@ht6/extraction`) via
 `src/store/`.
 
+Set `ENGINEERING_MEMORY_EMBEDDINGS=local` to add the dependency-free hashed-vector signal to
+lexical ranking. It is an offline hackathon fallback; replace `retrieval/embeddings.ts` with a
+semantic embedding provider for production.
+
 ## Tools
 
 ### `get_repo_conventions`
 
 Hybrid retrieval over the convention store: repository filter, path/language scope,
 full-text similarity (+ optional embeddings), ranked by confidence and support count.
+The MCP response is deliberately compact: rule, rationale, scope, signals, confidence, support
+count, supporting PR numbers, and a few accepted examples. Raw review records stay internal.
 
 ### `predict_review_feedback`
 
