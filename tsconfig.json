@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "packages/ingestion" },
+    { "path": "packages/extraction" },
+    { "path": "packages/mcp-server" }
+  ]
+}

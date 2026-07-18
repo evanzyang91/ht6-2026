@@ -1,0 +1,23 @@
+{
+  "name": "ht6-2026",
+  "private": true,
+  "version": "0.0.1",
+  "description": "MCP server that gives coding agents memory of an organization's past PR review conventions.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --force",
+    "test": "vitest run",
+    "ingest": "npm run start --workspace=@ht6/ingestion --",
+    "extract": "npm run start --workspace=@ht6/extraction --",
+    "mcp-server": "npm run start --workspace=@ht6/mcp-server --"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0",
+    "tsx": "^4.16.0",
+    "vitest": "^2.0.0"
+  }
+}

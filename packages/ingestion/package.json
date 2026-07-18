@@ -1,0 +1,16 @@
+{
+  "name": "@ht6/ingestion",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/ingest.js",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "tsx src/cli.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ht6/shared": "*",
+    "@octokit/rest": "^21.0.0"
+  }
+}

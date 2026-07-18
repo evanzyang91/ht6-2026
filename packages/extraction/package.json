@@ -1,0 +1,15 @@
+{
+  "name": "@ht6/extraction",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/conventions.js",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "tsx src/cli.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ht6/shared": "*"
+  }
+}

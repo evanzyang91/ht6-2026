@@ -1,0 +1,16 @@
+{
+  "name": "@ht6/mcp-server",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "tsx src/server.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ht6/shared": "*",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

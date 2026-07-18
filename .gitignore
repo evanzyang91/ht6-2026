@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Interchange data between pipeline stages — regenerate via `npm run ingest` / `npm run extract`.
+data/*
+!data/.gitkeep
+
+.env
+*.sqlite
+*.sqlite3
+
+.DS_Store
