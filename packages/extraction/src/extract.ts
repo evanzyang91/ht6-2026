@@ -4,6 +4,7 @@ import { buildConventionsFromAnalyzedEpisodes } from "./conventions.js";
 import { findAcceptedFix } from "./linking/findAcceptedFix.js";
 import { linkCommentToRejectedHunk } from "./linking/linkCommentsToHunks.js";
 import { scoreLinkageQuality } from "./linking/linkageQuality.js";
+import { buildReviewCodeContext } from "./context/buildReviewCodeContext.js";
 import { DeterministicSemanticAnalyzer } from "./semantic/deterministicSemanticAnalyzer.js";
 import type { AnalyzedReviewEpisode, SemanticAnalyzer, SemanticInput } from "./semantic/types.js";
 
@@ -35,6 +36,7 @@ export async function analyzeRawComment(
 ): Promise<AnalyzedReviewEpisode> {
   const rejectedCode = linkCommentToRejectedHunk(comment);
   const acceptedCode = findAcceptedFix(comment, rejectedCode);
+  const codeContext = buildReviewCodeContext(comment, acceptedCode);
   const semanticInput: SemanticInput = {
     repository: comment.repository,
     pullRequest: comment.pullRequest,
@@ -42,6 +44,7 @@ export async function analyzeRawComment(
     reviewComment: comment.body,
     rejectedCode,
     acceptedCode,
+    codeContext,
   };
   const semantics = await analyzer.analyze(semanticInput);
   const episode: ReviewEpisode = {
@@ -53,6 +56,7 @@ export async function analyzeRawComment(
     reviewComment: comment.body,
     rejectedCode,
     acceptedCode,
+    codeContext,
     acceptedFixQuality: scoreLinkageQuality(rejectedCode, acceptedCode, {
       matchedInMergedPatch: Boolean(
         acceptedCode && mergedPatchRemovesRejectedCode(comment.acceptedFilePatch, rejectedCode)

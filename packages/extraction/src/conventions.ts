@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Convention, ReviewEpisode } from "@ht6/shared";
+import type { Convention, ConventionDetection, ReviewEpisode } from "@ht6/shared";
 import { clusterEpisodes } from "./clustering/clusterConventions.js";
 import { inferScope } from "./clustering/scopeInference.js";
 import { extractCodeSignals } from "./semantic/codeSignals.js";
@@ -20,6 +20,7 @@ function episodeSemantics(episode: ReviewEpisode): SemanticAnalysis {
       rationale: persisted.rationale,
       prohibitedSignals: persisted.prohibitedSignals,
       preferredSignals: persisted.preferredSignals,
+      detection: persisted.detection,
     };
   }
   return analyzeDeterministically(semanticInputFromEpisode(episode));
@@ -37,18 +38,47 @@ function compileConventions(
     })[0];
     const representativeSemantics = semantics.get(representative.id) ?? episodeSemantics(representative);
     const { pathScopes, languages } = inferScope(cluster);
-    const prohibitedSignals = unique(cluster.flatMap(
+    const explicitDetections = cluster.flatMap((episode) => {
+      const detection = semantics.get(episode.id)?.detection;
+      return detection ? [detection] : [];
+    });
+    const legacyProhibitedSignals = unique(cluster.flatMap(
       (episode) => [
         ...(semantics.get(episode.id)?.prohibitedSignals ?? []),
         ...extractCodeSignals(episode.rejectedCode),
       ]
     ));
-    const preferredSignals = unique(cluster.flatMap(
+    const legacyPreferredSignals = unique(cluster.flatMap(
       (episode) => [
         ...(semantics.get(episode.id)?.preferredSignals ?? []),
         ...extractCodeSignals(episode.acceptedCode ?? ""),
       ]
     ));
+    const representativeDetection = representativeSemantics.detection;
+    const compatibleDetections = representativeDetection
+      ? explicitDetections.filter((item) => item.mode === representativeDetection.mode && item.matchScope === representativeDetection.matchScope)
+      : [];
+    const detection: ConventionDetection = representativeDetection
+      ? {
+        mode: representativeDetection.mode,
+        semanticDescription: representativeDetection.semanticDescription || representativeSemantics.rule,
+        triggerSignals: unique(compatibleDetections.flatMap((item) => item.triggerSignals)),
+        forbiddenSignals: unique(compatibleDetections.flatMap((item) => item.forbiddenSignals)),
+        requiredSignals: unique(compatibleDetections.flatMap((item) => item.requiredSignals)),
+        matchScope: representativeDetection.matchScope,
+      }
+      : {
+        mode: legacyProhibitedSignals.length ? "forbidden-signal" : "semantic",
+        semanticDescription: representativeSemantics.rule,
+        triggerSignals: [],
+        forbiddenSignals: legacyProhibitedSignals,
+        requiredSignals: [],
+        matchScope: "file",
+      };
+    const prohibitedSignals = explicitDetections.length ? detection.forbiddenSignals : legacyProhibitedSignals;
+    const preferredSignals = explicitDetections.length
+      ? unique([...detection.requiredSignals, ...cluster.flatMap((episode) => semantics.get(episode.id)?.preferredSignals ?? [])])
+      : legacyPreferredSignals;
     const distinctPrs = new Set(cluster.map((episode) => episode.pullRequest)).size;
     const acceptedCount = cluster.filter((episode) => episode.acceptedCode).length;
     const linkage = cluster.reduce(
@@ -75,6 +105,7 @@ function compileConventions(
       languages,
       prohibitedSignals,
       preferredSignals,
+      detection,
       confidence: Number(confidence.toFixed(3)),
       supportingEpisodes: cluster.map((episode) => episode.id),
       evidence: cluster.slice(0, 5).map((episode) => ({

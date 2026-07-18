@@ -1,4 +1,24 @@
+import type { ConventionDetection } from "./convention.js";
 import type { CommentIntent, LinkageQuality } from "./enums.js";
+
+export type ReviewSymbolKind = "function" | "method" | "class" | "component" | "module" | "unknown";
+
+/** Bounded historical source context surrounding an inline review comment. */
+export interface ReviewCodeContext {
+  source: "historical-file" | "diff-hunk";
+  language: string;
+  commentLine?: number;
+  enclosingSymbol?: {
+    name?: string;
+    kind: ReviewSymbolKind;
+    startLine: number;
+    endLine: number;
+  };
+  imports: string[];
+  reviewedContext: string;
+  acceptedContext?: string;
+  truncated: boolean;
+}
 
 export interface ReviewEpisodeSemanticAnalysis {
   provider: string;
@@ -9,6 +29,7 @@ export interface ReviewEpisodeSemanticAnalysis {
   rationale: string;
   prohibitedSignals: string[];
   preferredSignals: string[];
+  detection?: ConventionDetection;
 }
 
 // Stage 2 (extraction) intermediate output. A RawReviewComment linked to the code it was left
@@ -22,6 +43,7 @@ export interface ReviewEpisode {
   reviewComment: string;
   rejectedCode: string;
   acceptedCode?: string;
+  codeContext?: ReviewCodeContext;
   acceptedFixQuality: LinkageQuality;
   intent: CommentIntent;
   /** Persisted analyzer output so convention compilation is reproducible and auditable. */

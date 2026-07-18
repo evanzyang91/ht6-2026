@@ -61,7 +61,8 @@ count, supporting PR numbers, and a few accepted examples. Raw review records st
 ### `predict_review_feedback`
 
 Validates a supplied diff against known conventions: added-line parsing, import/call
-detection, path scope match, prohibited-signal match, optional LLM fallback for
+detection, path scope match, contextual forbidden-signal and missing-required-signal checks,
+plus an optional LLM fallback for
 ambiguous cases. Returns compact, evidence-backed findings, e.g.:
 
 ```json

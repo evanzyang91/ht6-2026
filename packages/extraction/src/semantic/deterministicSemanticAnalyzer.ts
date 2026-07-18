@@ -47,6 +47,23 @@ export function analyzeDeterministically(input: SemanticInput): SemanticAnalysis
   const rationale = input.acceptedCode
     ? "The accepted implementation replaced the reviewed pattern with the preferred pattern."
     : "Derived from the review comment and the code it was attached to; no accepted replacement was available.";
+  const detection = intent === "question-nonactionable" || !prohibitedSignals.length
+    ? {
+      mode: "semantic" as const,
+      semanticDescription: rule,
+      triggerSignals: [],
+      forbiddenSignals: [],
+      requiredSignals: [],
+      matchScope: "line" as const,
+    }
+    : {
+      mode: "forbidden-signal" as const,
+      semanticDescription: rule,
+      triggerSignals: [],
+      forbiddenSignals: prohibitedSignals,
+      requiredSignals: [],
+      matchScope: "line" as const,
+    };
 
   return {
     intent,
@@ -55,6 +72,7 @@ export function analyzeDeterministically(input: SemanticInput): SemanticAnalysis
     rationale,
     prohibitedSignals,
     preferredSignals,
+    detection,
   };
 }
 
@@ -66,4 +84,3 @@ export class DeterministicSemanticAnalyzer implements SemanticAnalyzer {
     return analyzeDeterministically(input);
   }
 }
-

@@ -60,11 +60,25 @@ A convention is an executable policy with provenance:
   "languages": ["typescript"],
   "prohibitedSignals": ["prisma.user.findMany"],
   "preferredSignals": ["userService.list"],
+  "detection": {
+    "mode": "forbidden-signal",
+    "semanticDescription": "A controller accesses Prisma directly.",
+    "triggerSignals": [],
+    "forbiddenSignals": ["prisma.user.findMany"],
+    "requiredSignals": [],
+    "matchScope": "line"
+  },
   "confidence": 0.89,
   "supportingEpisodes": ["episode-a", "episode-b"],
   "evidence": [{ "pullRequest": 142, "rejectedCode": "...", "acceptedCode": "..." }]
 }
 ```
+
+Detection is hybrid: `semanticDescription` preserves the broader English condition, while exact
+signals support fast deterministic checks. `triggerSignals` constrain when a forbidden pattern is
+relevant. A `missing-required-signal` rule instead fires when its trigger is present but required
+code is absent. `semantic` rules use the optional model fallback. Older convention records without
+`detection` continue to use their flat `prohibitedSignals` behavior.
 
 Keep confidence separate from severity. Confidence measures whether the convention is real; severity
 describes the cost of violating it and should be added once the team has a reliable taxonomy.

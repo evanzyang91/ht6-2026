@@ -29,3 +29,12 @@ capped at the 2000 most recent). A relational production target is defined in
 | `"conversation"` | `issues.listComments` | No | General PR conversation-tab comments, not tied to a review or diff line. Carries `authorAssociation` (OWNER/MEMBER/etc) as an authority signal. |
 
 All three carry the shared PR-level context fields (`pullRequestTitle`, `mergedAt`, `mergedCommitSha`) alongside their own `commentId`/`reviewer`/`body`/`createdAt`. `@ht6/extraction`'s read boundary (`pipeline.ts`) filters to `type !== "review-summary" && type !== "conversation"` before running hunk-linking — the other two types are persisted but not yet fed through convention extraction, since there's no code to anchor them to. That's a deliberate extension point, not an oversight.
+
+### `ReviewEpisode.codeContext`
+
+For inline comments, extraction uses `reviewedFileContent` and `mergedFileContent` to build bounded
+historical context around the commented line. The episode stores language, imports, enclosing symbol
+name/kind/range, up to 100 lines of reviewed and accepted symbol context, and whether that context was
+truncated. If exact historical content was unavailable, it falls back to the GitHub diff hunk. This
+is an LSP-style context boundary: a production resolver can replace the source heuristic with a real
+language server after checking out the historical commit, without changing the model input schema.

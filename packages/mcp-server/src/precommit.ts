@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { ensureMemoryFresh } from "@ht6/pipeline";
 import { createConventionStore } from "./store/conventionStore.js";
 import { validateAgainstDiff, type PredictedFeedback } from "./validation/index.js";
@@ -103,12 +103,34 @@ function printFinding(finding: PredictedFeedback, blocker: boolean): void {
   if (finding.acceptedExamples[0]) process.stderr.write(`Accepted example:\n${finding.acceptedExamples[0]}\n`);
 }
 
-async function main(): Promise<void> {
+/** Node 18-compatible replacement for process.loadEnvFile (added in later Node releases). */
+export async function loadEnvironmentFile(filePath: string): Promise<void> {
+  let contents: string;
   try {
-    process.loadEnvFile(resolve(process.cwd(), ".env"));
+    contents = await readFile(filePath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
   }
+  for (const rawLine of contents.split(/\r?\n/)) {
+    const line = rawLine.trim().replace(/^export\s+/, "");
+    if (!line || line.startsWith("#")) continue;
+    const separator = line.indexOf("=");
+    if (separator < 1) continue;
+    const key = line.slice(0, separator).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || process.env[key] !== undefined) continue;
+    let value = line.slice(separator + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    } else {
+      value = value.replace(/\s+#.*$/, "").trimEnd();
+    }
+    process.env[key] = value;
+  }
+}
+
+async function main(): Promise<void> {
+  await loadEnvironmentFile(resolve(process.cwd(), ".env"));
   const threshold = process.env.ENGINEERING_MEMORY_BLOCK_THRESHOLD
     ? Number(process.env.ENGINEERING_MEMORY_BLOCK_THRESHOLD)
     : undefined;

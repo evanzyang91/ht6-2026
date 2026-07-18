@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.1",
   "description": "MCP server that gives coding agents memory of an organization's past PR review conventions.",
+  "engines": {
+    "node": ">=20"
+  },
   "workspaces": [
     "packages/*"
   ],
@@ -25,7 +28,9 @@
     "review-check": "tsx packages/mcp-server/src/precommit.ts",
     "hooks:install": "git config core.hooksPath .githooks",
     "webhook-server": "npm run start --workspace=@ht6/webhook-server --",
-    "vscode:build": "npm run build --workspace=engineering-memory-vscode"
+    "vscode:build": "npm run build --workspace=engineering-memory-vscode",
+    "freesolo:mock-data": "node scripts/generate-freesolo-mock-data.mjs",
+    "freesolo:check-response": "node scripts/check-freesolo-response.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
