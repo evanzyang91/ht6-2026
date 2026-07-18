@@ -49,6 +49,20 @@ async function initializeMemory(
   });
 }
 
+// Unlike initializeMemory, this does not run extraction — it only ingests newly merged PRs and
+// leaves compiling that into conventions for the next read (loadMemory/validateMemory), which
+// runs ensureMemoryFresh lazily. Used by the background auto-ingest poll, which should never
+// force a full extraction pass just because its timer fired.
+async function refreshMemory(
+  repository: string,
+  token: string,
+  dataDirectory: string,
+  limit: number,
+): Promise<{ commentCount: number }> {
+  const { refreshRepositoryMemory } = await import("@ht6/mcp-server/api");
+  return refreshRepositoryMemory(repository, { token, dataDirectory, limit });
+}
+
 interface WorkspaceContext {
   root: string;
   repository: string;
@@ -64,6 +78,8 @@ class MemoryController implements vscode.Disposable {
   private readonly popupHistory = new Map<string, PopupRecord>();
   private readonly initializationPrompts = new Set<string>();
   private commitWatchers: vscode.Disposable[] = [];
+  private autoIngestTimer: NodeJS.Timeout | undefined;
+  private autoIngestRunning = false;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.status.command = "engineeringMemory.validateStagedChanges";
@@ -83,10 +99,12 @@ class MemoryController implements vscode.Disposable {
           void this.validateCurrentFile();
           void this.checkRepositoryInitialization();
         }
+        if (event.affectsConfiguration("engineeringMemory.autoIngestIntervalSeconds")) this.scheduleAutoIngest();
       }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         this.setupCommitWatchers();
         void this.checkRepositoryInitialization();
+        void this.autoIngestCurrentRepository();
       }),
       vscode.commands.registerCommand("engineeringMemory.validateCurrentFile", () => this.validateCurrentFile()),
       vscode.commands.registerCommand("engineeringMemory.validateStagedChanges", () => this.validateStagedChanges()),
@@ -100,11 +118,13 @@ class MemoryController implements vscode.Disposable {
       }, { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }),
     );
     void this.checkRepositoryInitialization();
+    this.scheduleAutoIngest();
   }
 
   dispose(): void {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
+    if (this.autoIngestTimer) clearInterval(this.autoIngestTimer);
     for (const watcher of this.commitWatchers) watcher.dispose();
     this.commitWatchers = [];
   }
@@ -253,6 +273,48 @@ class MemoryController implements vscode.Disposable {
         "View Details",
       );
       if (selected === "View Details") this.output.show(true);
+    }
+  }
+
+  private scheduleAutoIngest(): void {
+    if (this.autoIngestTimer) clearInterval(this.autoIngestTimer);
+    const seconds = this.configuration().get("autoIngestIntervalSeconds", 300);
+    if (!seconds) return;
+    this.autoIngestTimer = setInterval(() => void this.autoIngestCurrentRepository(), seconds * 1000);
+    void this.autoIngestCurrentRepository();
+  }
+
+  /**
+   * Silently checks the current repository for newly merged PRs and ingests just those — never
+   * the full initializeRepository flow, and deliberately does NOT run extraction (see
+   * refreshMemory): ingesting on a timer should not force a compile pass every tick. Whatever
+   * new data lands here gets compiled lazily the next time memory is actually read (a file save,
+   * "Show Current Memory", etc.), same as the webhook path leaves it for the next MCP call.
+   * Never prompts a GitHub login: only an already-established session is used
+   * (createIfNone: false, silent: true), so a repository nobody has explicitly initialized yet
+   * is silently left alone rather than nagging the user on a timer.
+   */
+  private async autoIngestCurrentRepository(): Promise<void> {
+    if (this.autoIngestRunning) return;
+    const folder = this.commandFolder();
+    if (!folder || !vscode.workspace.isTrusted) return;
+    this.autoIngestRunning = true;
+    try {
+      const context = await this.contextForFolder(folder);
+      const session = await vscode.authentication.getSession("github", ["repo"], {
+        createIfNone: false,
+        silent: true,
+      });
+      if (!session) return;
+      const limit = this.configuration().get("historyLimit", 75);
+      const result = await refreshMemory(context.repository, session.accessToken, context.dataDirectory, limit);
+      this.output.appendLine(
+        `[${new Date().toISOString()}] Auto-refresh: ${context.repository} now has ${result.commentCount} stored comments.`
+      );
+    } catch (error) {
+      this.output.appendLine(`[${new Date().toISOString()}] Auto-refresh: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.autoIngestRunning = false;
     }
   }
 

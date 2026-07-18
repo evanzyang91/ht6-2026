@@ -85,4 +85,10 @@ Also exposed: `find_similar_rejected_patterns`, `explain_engineering_decision`, 
 - `src/retrieval/` — pieces composed by `get_repo_conventions`.
 - `src/validation/` — pieces composed by `predict_review_feedback`.
 - `src/tools/` — the two MCP tool definitions/handlers.
+- `src/api.ts` (exported as `@ht6/mcp-server/api`) — the stable client surface shared by the
+  pre-commit hook and `packages/vscode-extension`: `inspectRepositoryMemory`,
+  `initializeRepositoryMemory` (ingest + eager extraction, for the explicit "Initialize
+  Repository" action), `refreshRepositoryMemory` (ingest only, no extraction — for background
+  polling that shouldn't force a compile pass every tick), `loadRepositoryMemory` /
+  `validateRepositoryDiff` (both call `ensureMemoryFresh` first, so extraction stays lazy).
 - `tests/` — per-tool tests plus an end-to-end MCP integration test.

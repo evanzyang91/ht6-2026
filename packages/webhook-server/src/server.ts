@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
-import { pathToFileURL } from "node:url";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { handleGitHubEvent } from "./handleGitHubEvent.js";
 import { verifyGitHubSignature } from "./verifyGitHubSignature.js";
 
@@ -57,6 +58,19 @@ async function main(): Promise<void> {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  // npm workspace scripts run with cwd set to this package's directory, not the repo root —
+  // fix that so relative paths (.env, DATA_DIR=./data) resolve the way .env.example documents.
+  const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+  process.chdir(REPO_ROOT);
+
+  for (const envFile of [".env", ".env.local"]) {
+    try {
+      process.loadEnvFile(envFile);
+    } catch {
+      // file doesn't exist — fine, vars may already be exported in the shell.
+    }
+  }
+
   main().catch((error) => {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;

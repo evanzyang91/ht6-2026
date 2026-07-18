@@ -100,6 +100,33 @@ export async function initializeRepositoryMemory(
   }
 }
 
+/**
+ * Ingests newly merged PRs for a repository without running extraction — the editor-integration
+ * equivalent of the webhook path's ingestMergedPullRequest, for a background poll that shouldn't
+ * force a full extraction pass on every tick. ingest() already skips PRs already represented in
+ * the store, so a poll where nothing new has merged costs one PR-list request, not a re-scrape.
+ * Extraction stays lazy: the next loadRepositoryMemory/validateRepositoryDiff call (via
+ * ensureMemoryFresh) picks up the bumped ingestion version and compiles memory then.
+ */
+export async function refreshRepositoryMemory(
+  repository: string,
+  options: { token: string; dataDirectory?: string; limit?: number },
+): Promise<{ repository: string; commentCount: number }> {
+  const dataDirectory = options.dataDirectory ?? process.env.DATA_DIR ?? "data";
+  try {
+    const comments = await ingest(repository, {
+      token: options.token,
+      dataDirectory,
+      limit: options.limit,
+    });
+    return { repository, commentCount: comments.length };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await markRepositoryMemoryFailed(repository, message, dataDirectory);
+    throw error;
+  }
+}
+
 /** Read-only snapshot used by editor integrations to explain the currently compiled memory. */
 export async function loadRepositoryMemory(
   repository: string,

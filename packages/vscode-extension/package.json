@@ -77,6 +77,13 @@
           "maximum": 250,
           "description": "Maximum recent merged pull requests fetched during repository initialization."
         },
+        "engineeringMemory.autoIngestIntervalSeconds": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 3600,
+          "description": "How often to silently check the current repository for newly merged PRs and ingest them (0 disables background checks; only already-signed-in sessions are used — this never prompts a GitHub login)."
+        },
         "engineeringMemory.minimumConfidence": {
           "type": "number",
           "default": 0.8,

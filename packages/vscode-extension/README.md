@@ -56,6 +56,21 @@ Commands:
 - `Engineering Memory: Initialize Repository Memory` — sign into GitHub and backfill/compile the
   current repository without CLI setup.
 
+## Staying current automatically
+
+After the first **Initialize Repository Memory**, the extension silently checks the current
+repository for newly merged PRs on a timer (`engineeringMemory.autoIngestIntervalSeconds`,
+default 300s; `0` disables it) and on workspace/folder changes — no manual re-run needed. This
+never prompts a GitHub sign-in: it only uses a session VS Code already has, so a repository you
+haven't explicitly initialized yet is left alone rather than nagging you on every tick.
+
+Only newly merged PRs are fetched — `ingest()` skips anything already represented in local
+memory, so a check where nothing has merged since the last one costs a single PR-list request,
+not a re-scrape of history. This step deliberately does **not** compile conventions immediately;
+that still happens lazily, the next time memory is actually read (a file save, "Show Current
+Memory," etc.) — same lazy-extraction design the GitHub webhook path uses for teams running a
+shared server instead of (or alongside) this extension.
+
 ## Popup behavior and limitations
 
 VS Code notifications are transient, have limited room, are not anchored to a code line, and can be

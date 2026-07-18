@@ -106,19 +106,28 @@ function commentId(comment: RawComment): string {
 
 // Orchestrates one ingestion run for `owner/repository`:
 //   1. fetch 50-100 merged PRs (github/fetchPullRequests.ts)
-//   2. for each PR, fetch inline review comments, review summaries, conversation comments,
-//      changed files/patches, and exact file content at both commits
+//   2. for each PR NOT already covered in the store, fetch inline review comments, review
+//      summaries, conversation comments, changed files/patches, and exact file content at both
+//      commits
 //   3. persist RawComment[] via storage/index.ts
 //
 // Existing comment IDs are retained so reruns are resumable and idempotent. The repository's
 // ingestion version is only bumped when this run actually added a comment that wasn't already
 // stored — a no-op rerun (nothing new merged) must not trigger a downstream re-extraction.
+//
+// PRs already represented in the store are skipped *before* fetching their comments/patches/
+// content, not just deduped afterward — this is what makes it cheap to call ingest() repeatedly
+// (e.g. on a poll timer): a rerun where nothing new has merged costs one PR-list request, not a
+// full re-fetch of every PR in the scan window. A merged PR with zero comments of any type is
+// the one case this can't detect (nothing in the store references it) — it gets re-checked
+// every run, which costs one cheap round of empty fetches, not a correctness problem.
 async function runIngestion(repoSlug: string, options: IngestOptions): Promise<RawComment[]> {
   const { owner, repo } = parseRepository(repoSlug);
   const limit = options.limit ?? 75;
   const store = createStore(options.dataDirectory);
   const existing = await store.load(repoSlug);
   const existingIds = new Set(existing.map(commentId));
+  const existingPrNumbers = new Set(existing.map((comment) => comment.pullRequest));
   options.onProgress?.({
     phase: "fetching-pull-requests",
     current: 0,
@@ -136,6 +145,7 @@ async function runIngestion(repoSlug: string, options: IngestOptions): Promise<R
       total: pullRequests.length,
       message: `Processing pull request #${pr.number} (${index + 1}/${pullRequests.length})…`,
     });
+    if (existingPrNumbers.has(pr.number)) continue;
     for (const comment of await collectPullRequestComments(owner, repo, pr)) {
       if (existingIds.has(commentId(comment))) continue;
       collected.push(comment);
