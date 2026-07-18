@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PredictedFeedback } from "@ht6/mcp-server/api";
-import { applySafeguards } from "../src/safeguards.js";
+import { applySafeguards, diagnoseSafeguards } from "../src/safeguards.js";
 import { repositoryFromRemote } from "../src/git.js";
 import { shouldShowPopup } from "../src/popupPolicy.js";
 
@@ -38,6 +38,29 @@ describe("editor false-positive safeguards", () => {
       finding({ conventionId: "third", matchedLine: 15 }),
     ], { ...settings, mutedConventionIds: ["muted"] });
     expect(results.map((item) => item.conventionId)).toEqual(["no-prisma", "second"]);
+  });
+
+  it("reports why raw findings were filtered", () => {
+    const result = diagnoseSafeguards([
+      finding({ confidence: 0.7 }),
+      finding({ conventionId: "unsupported", supportCount: 1 }),
+      finding({ conventionId: "muted" }),
+      finding(),
+      finding(),
+      finding({ conventionId: "second", matchedLine: 14 }),
+      finding({ conventionId: "third", matchedLine: 15 }),
+    ], { ...settings, mutedConventionIds: ["muted"] });
+
+    expect(result.findings.map((item) => item.conventionId)).toEqual(["no-prisma", "second"]);
+    expect(result.diagnostics).toMatchObject({
+      inputCount: 7,
+      outputCount: 2,
+      belowConfidence: 1,
+      insufficientSupport: 1,
+      muted: 1,
+      duplicates: 1,
+      overFileLimit: 1,
+    });
   });
 
   it("infers GitHub repository slugs without prompting", () => {

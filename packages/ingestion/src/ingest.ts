@@ -7,6 +7,24 @@ import { fetchReviewSummaries } from "./github/fetchReviewSummaries.js";
 import { fetchConversationComments } from "./github/fetchConversationComments.js";
 import { createStore } from "./storage/index.js";
 import { markRepositoryIngested } from "@ht6/pipeline";
+import { withGitHubToken } from "./github/client.js";
+
+export interface IngestionProgress {
+  phase: "fetching-pull-requests" | "fetching-comments" | "complete";
+  current: number;
+  total: number;
+  message: string;
+}
+
+export interface IngestOptions {
+  limit?: number;
+  /** Ephemeral credential, normally supplied by VS Code's GitHub authentication provider. */
+  token?: string;
+  dataDirectory?: string;
+  /** Persist an explicit empty source snapshot so downstream extraction can distinguish it from missing data. */
+  persistEmptySnapshot?: boolean;
+  onProgress?: (progress: IngestionProgress) => void;
+}
 
 function parseRepository(repoSlug: string): { owner: string; repo: string } {
   const [owner, repo, extra] = repoSlug.split("/");
@@ -95,16 +113,29 @@ function commentId(comment: RawComment): string {
 // Existing comment IDs are retained so reruns are resumable and idempotent. The repository's
 // ingestion version is only bumped when this run actually added a comment that wasn't already
 // stored — a no-op rerun (nothing new merged) must not trigger a downstream re-extraction.
-export async function ingest(repoSlug: string, limit = 75): Promise<RawComment[]> {
+async function runIngestion(repoSlug: string, options: IngestOptions): Promise<RawComment[]> {
   const { owner, repo } = parseRepository(repoSlug);
-  const store = createStore();
+  const limit = options.limit ?? 75;
+  const store = createStore(options.dataDirectory);
   const existing = await store.load(repoSlug);
   const existingIds = new Set(existing.map(commentId));
+  options.onProgress?.({
+    phase: "fetching-pull-requests",
+    current: 0,
+    total: limit,
+    message: `Finding the latest ${limit} merged pull requests…`,
+  });
   const pullRequests = await fetchMergedPullRequests(owner, repo, limit);
   const collected = [...existing];
   let changed = false;
 
-  for (const pr of pullRequests) {
+  for (const [index, pr] of pullRequests.entries()) {
+    options.onProgress?.({
+      phase: "fetching-comments",
+      current: index,
+      total: pullRequests.length,
+      message: `Processing pull request #${pr.number} (${index + 1}/${pullRequests.length})…`,
+    });
     for (const comment of await collectPullRequestComments(owner, repo, pr)) {
       if (existingIds.has(commentId(comment))) continue;
       collected.push(comment);
@@ -113,15 +144,32 @@ export async function ingest(repoSlug: string, limit = 75): Promise<RawComment[]
     }
   }
 
-  if (changed) await store.save(repoSlug, collected);
+  if (changed || (options.persistEmptySnapshot && !existing.length)) {
+    await store.save(repoSlug, collected);
+  }
   const mostRecentPr = pullRequests.reduce(
     (latest, pr) => (latest === undefined || pr.number > latest ? pr.number : latest),
     undefined as number | undefined,
   );
   if (mostRecentPr !== undefined) {
-    await markRepositoryIngested(repoSlug, mostRecentPr, undefined, { changed });
+    await markRepositoryIngested(repoSlug, mostRecentPr, options.dataDirectory, { changed });
   }
+  options.onProgress?.({
+    phase: "complete",
+    current: pullRequests.length,
+    total: pullRequests.length,
+    message: `Collected ${collected.length} review comments.`,
+  });
   return collected;
+}
+
+export async function ingest(
+  repoSlug: string,
+  limitOrOptions: number | IngestOptions = 75,
+): Promise<RawComment[]> {
+  const options = typeof limitOrOptions === "number" ? { limit: limitOrOptions } : limitOrOptions;
+  const operation = () => runIngestion(repoSlug, options);
+  return options.token ? withGitHubToken(options.token, operation) : operation();
 }
 
 /** Ingests exactly one PR and rejects calls made before that PR has merged. */

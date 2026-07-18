@@ -40,13 +40,21 @@ npm run hooks:install
 ```
 
 Open the repository in VS Code, select **Run and Debug**, and launch **Engineering Memory Extension**.
-The extension defaults to `<workspace>/data`; set `engineeringMemory.dataDirectory` when memory is
-stored elsewhere. The repository slug is inferred from `origin` unless explicitly configured.
+The repository slug is inferred from `origin` unless explicitly configured. On first use, the
+extension offers **Initialize Memory**, signs in through VS Code's built-in GitHub authentication,
+backfills merged PR review history, and compiles conventions into private extension storage. Tokens
+remain managed by VS Code and are never written to the workspace or extension settings.
 
 Commands:
 
 - `Engineering Memory: Validate Current File`
 - `Engineering Memory: Validate Staged Changes`
+- `Engineering Memory: Diagnose Current File` — explain configuration, diff detection, matching,
+  and safeguard filtering in the Output channel.
+- `Engineering Memory: Show Current Memory` — list the configured repository's compiled
+  conventions, scopes, signals, confidence, and supporting PRs.
+- `Engineering Memory: Initialize Repository Memory` — sign into GitHub and backfill/compile the
+  current repository without CLI setup.
 
 ## Popup behavior and limitations
 

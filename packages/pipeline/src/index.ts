@@ -4,6 +4,7 @@ export {
   markRepositoriesExtracted,
   markRepositoryExtracted,
   markRepositoryIngested,
+  markRepositoryMemoryFailed,
   type PipelineState,
   type RepositoryPipelineState,
 } from "./state.js";

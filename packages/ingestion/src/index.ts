@@ -1,1 +1,6 @@
-export { ingest, ingestMergedPullRequest } from "./ingest.js";
+export {
+  ingest,
+  ingestMergedPullRequest,
+  type IngestionProgress,
+  type IngestOptions,
+} from "./ingest.js";
