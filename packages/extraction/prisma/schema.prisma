@@ -1,0 +1,142 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ExtractionRunStatus {
+  BUILDING
+  PUBLISHED
+  SUPERSEDED
+  FAILED
+}
+
+enum LinkageQuality {
+  HIGH
+  MEDIUM
+  UNKNOWN
+}
+
+enum CommentIntent {
+  ACTIONABLE
+  ARCHITECTURE
+  TESTING
+  SECURITY
+  STYLE
+  QUESTION
+}
+
+/// Minimal repository identity owned by extraction. Ingestion still owns the raw
+/// GitHub snapshot and hands it off through raw-comments.json.
+model Repository {
+  id                    String          @id @default(uuid()) @db.Uuid
+  slug                  String          @unique
+  activeExtractionRunId String?         @unique @map("active_extraction_run_id") @db.Uuid
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  activeExtractionRun ExtractionRun?  @relation("ActiveExtractionRun", fields: [activeExtractionRunId], references: [id], onDelete: SetNull)
+  extractionRuns      ExtractionRun[] @relation("RepositoryExtractionRuns")
+
+  @@map("repositories")
+}
+
+/// One immutable attempt to derive memory for one repository. Readers should
+/// only serve the run referenced by Repository.activeExtractionRunId.
+model ExtractionRun {
+  id                String              @id @default(uuid()) @db.Uuid
+  repositoryId      String              @map("repository_id") @db.Uuid
+  status            ExtractionRunStatus @default(BUILDING)
+  inputDigest       String              @map("input_digest")
+  inputCommentCount Int                 @map("input_comment_count")
+  analyzerProvider  String              @map("analyzer_provider")
+  analyzerVersion   String              @map("analyzer_version")
+  extractorVersion  String              @map("extractor_version")
+  episodeCount      Int                 @default(0) @map("episode_count")
+  conventionCount   Int                 @default(0) @map("convention_count")
+  startedAt         DateTime            @default(now()) @map("started_at")
+  completedAt       DateTime?           @map("completed_at")
+  error             String?
+
+  repository Repository @relation("RepositoryExtractionRuns", fields: [repositoryId], references: [id], onDelete: Cascade)
+  activeFor   Repository? @relation("ActiveExtractionRun")
+  episodes    ReviewEpisode[]
+  conventions Convention[]
+
+  @@index([repositoryId, status])
+  @@index([repositoryId, startedAt(sort: Desc)])
+  @@unique([repositoryId, inputDigest, extractorVersion, analyzerProvider, analyzerVersion], map: "extraction_runs_published_fingerprint_key", where: raw("status = 'PUBLISHED'::\"ExtractionRunStatus\""))
+  @@map("extraction_runs")
+}
+
+model ReviewEpisode {
+  id                   String         @id @default(uuid()) @db.Uuid
+  runId                String         @map("run_id") @db.Uuid
+  episodeKey           String         @map("episode_key")
+  pullRequest          Int            @map("pull_request")
+  reviewer             String
+  filePath             String         @map("file_path")
+  reviewComment        String         @map("review_comment")
+  rejectedCode         String         @map("rejected_code")
+  acceptedCode         String?        @map("accepted_code")
+  acceptedFixQuality   LinkageQuality @map("accepted_fix_quality")
+  intent               CommentIntent
+  semanticTitle        String         @map("semantic_title")
+  semanticRule         String         @map("semantic_rule")
+  semanticRationale    String         @map("semantic_rationale")
+  prohibitedSignals    String[]       @default([]) @map("prohibited_signals")
+  preferredSignals     String[]       @default([]) @map("preferred_signals")
+  semanticSnapshot     Json           @map("semantic_snapshot")
+  sourceCreatedAt      DateTime       @map("source_created_at")
+  createdAt            DateTime       @default(now()) @map("created_at")
+
+  run      ExtractionRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  evidence ConventionEvidence[]
+
+  @@unique([runId, episodeKey])
+  @@index([runId, pullRequest])
+  @@map("review_episodes")
+}
+
+model Convention {
+  id                String        @id @default(uuid()) @db.Uuid
+  runId             String        @map("run_id") @db.Uuid
+  conventionKey     String        @map("convention_key")
+  title             String
+  rule              String
+  rationale         String
+  category          CommentIntent
+  pathScopes        String[]      @default([]) @map("path_scopes")
+  languages         String[]      @default([])
+  prohibitedSignals String[]      @default([]) @map("prohibited_signals")
+  preferredSignals  String[]      @default([]) @map("preferred_signals")
+  confidence        Float
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  run      ExtractionRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  evidence ConventionEvidence[]
+
+  @@unique([runId, conventionKey])
+  @@index([runId, category])
+  @@map("conventions")
+}
+
+/// Normalized provenance join. Review text/code is not duplicated here; it is
+/// read from the linked immutable episode.
+model ConventionEvidence {
+  conventionId String @map("convention_id") @db.Uuid
+  episodeId    String @map("episode_id") @db.Uuid
+  position     Int
+
+  convention Convention    @relation(fields: [conventionId], references: [id], onDelete: Cascade)
+  episode    ReviewEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@id([conventionId, episodeId])
+  @@unique([conventionId, position])
+  @@index([episodeId])
+  @@map("convention_evidence")
+}

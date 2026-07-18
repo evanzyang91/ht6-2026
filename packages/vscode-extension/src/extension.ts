@@ -9,6 +9,7 @@ import type {
 import { applySafeguards, diagnoseSafeguards, type SafeguardSettings } from "./safeguards.js";
 import { diffForFile, repositoryForWorkspace, stagedDiff } from "./git.js";
 import { shouldShowPopup, type PopupRecord } from "./popupPolicy.js";
+import { EngineeringMemoryGraphqlClient } from "./graphqlClient.js";
 
 const SOURCE = "Engineering Memory";
 
@@ -18,17 +19,20 @@ interface CommitReviewNotification {
   findings: PredictedFeedback[];
 }
 
-async function validateMemory(repository: string, diff: string, dataDirectory: string) {
+async function validateMemory(repository: string, diff: string, dataDirectory: string, apiUrl: string, token?: string) {
+  if (apiUrl) return new EngineeringMemoryGraphqlClient(apiUrl, requiredToken(token)).validate(repository, diff);
   const { validateRepositoryDiff } = await import("@ht6/mcp-server/api");
   return validateRepositoryDiff(repository, diff, { dataDirectory });
 }
 
-async function loadMemory(repository: string, dataDirectory: string): Promise<EngineeringMemorySnapshot> {
+async function loadMemory(repository: string, dataDirectory: string, apiUrl: string, token?: string): Promise<EngineeringMemorySnapshot> {
+  if (apiUrl) return new EngineeringMemoryGraphqlClient(apiUrl, requiredToken(token)).memory(repository);
   const { loadRepositoryMemory } = await import("@ht6/mcp-server/api");
   return loadRepositoryMemory(repository, { dataDirectory });
 }
 
-async function inspectMemory(repository: string, dataDirectory: string): Promise<RepositoryMemoryInspection> {
+async function inspectMemory(repository: string, dataDirectory: string, apiUrl: string, token?: string): Promise<RepositoryMemoryInspection> {
+  if (apiUrl) return new EngineeringMemoryGraphqlClient(apiUrl, requiredToken(token)).inspect(repository);
   const { inspectRepositoryMemory } = await import("@ht6/mcp-server/api");
   return inspectRepositoryMemory(repository, { dataDirectory });
 }
@@ -39,7 +43,12 @@ async function initializeMemory(
   dataDirectory: string,
   limit: number,
   onProgress: (message: string) => void,
+  apiUrl: string,
 ): Promise<MemoryInitializationResult> {
+  if (apiUrl) {
+    onProgress("Requesting repository sync…");
+    return new EngineeringMemoryGraphqlClient(apiUrl, token).sync(repository, limit);
+  }
   const { initializeRepositoryMemory } = await import("@ht6/mcp-server/api");
   return initializeRepositoryMemory(repository, {
     token,
@@ -67,6 +76,12 @@ interface WorkspaceContext {
   root: string;
   repository: string;
   dataDirectory: string;
+  apiUrl: string;
+}
+
+function requiredToken(token: string | undefined): string {
+  if (!token) throw new Error("Sign in to GitHub with Engineering Memory before using the hosted API");
+  return token;
 }
 
 class MemoryController implements vscode.Disposable {
@@ -159,11 +174,7 @@ class MemoryController implements vscode.Disposable {
     if (document) await this.validateDocument(document);
   }
 
-  private async contextForDocument(document: vscode.TextDocument): Promise<{
-    root: string;
-    repository: string;
-    dataDirectory: string;
-  } | undefined> {
+  private async contextForDocument(document: vscode.TextDocument): Promise<WorkspaceContext | undefined> {
     if (!vscode.workspace.isTrusted || document.uri.scheme !== "file") return undefined;
     const folder = vscode.workspace.getWorkspaceFolder(document.uri);
     if (!folder) return undefined;
@@ -179,7 +190,15 @@ class MemoryController implements vscode.Disposable {
     const dataDirectory = configuredData
       ? (isAbsolute(configuredData) ? configuredData : resolve(root, configuredData))
       : this.context.globalStorageUri.fsPath;
-    return { root, repository, dataDirectory };
+    const apiUrl = this.configuration().get<string>("apiUrl", "").trim();
+    return { root, repository, dataDirectory, apiUrl };
+  }
+
+  private async githubToken(createIfNone: boolean): Promise<string | undefined> {
+    const session = await vscode.authentication.getSession("github", ["repo"], createIfNone
+      ? { createIfNone: { detail: "Engineering Memory needs access to repository review history." } }
+      : { createIfNone: false });
+    return session?.accessToken;
   }
 
   private async checkRepositoryInitialization(): Promise<void> {
@@ -187,7 +206,10 @@ class MemoryController implements vscode.Disposable {
     if (!folder || !vscode.workspace.isTrusted) return;
     try {
       const context = await this.contextForFolder(folder);
-      const inspection = await inspectMemory(context.repository, context.dataDirectory);
+      const token = context.apiUrl ? await this.githubToken(false) : undefined;
+      const inspection = context.apiUrl && !token
+        ? { repository: context.repository, status: "unprocessed" as const, conventionCount: 0 }
+        : await inspectMemory(context.repository, context.dataDirectory, context.apiUrl, token);
       if (inspection.status === "ready") {
         this.status.text = `$(shield) Memory: ${inspection.conventionCount} conventions`;
         this.status.command = "engineeringMemory.showCurrentMemory";
@@ -195,7 +217,7 @@ class MemoryController implements vscode.Disposable {
       }
       if (inspection.status === "stale") {
         this.status.text = "$(sync~spin) Memory refreshing";
-        await loadMemory(context.repository, context.dataDirectory);
+        await loadMemory(context.repository, context.dataDirectory, context.apiUrl, token);
         await this.checkRepositoryInitialization();
         return;
       }
@@ -252,6 +274,7 @@ class MemoryController implements vscode.Disposable {
         context.dataDirectory,
         limit,
         (message) => progress.report({ message }),
+        context.apiUrl,
       ));
       this.status.text = result.conventionCount
         ? `$(shield) Memory: ${result.conventionCount} conventions`
@@ -341,7 +364,7 @@ class MemoryController implements vscode.Disposable {
         return;
       }
       this.status.text = "$(sync~spin) Memory checking";
-      const result = await validateMemory(context.repository, diff, context.dataDirectory);
+      const result = await validateMemory(context.repository, diff, context.dataDirectory, context.apiUrl, await this.githubToken(false));
       if (!result.conventionCount) {
         this.diagnostics.delete(document.uri);
         this.status.text = "$(shield) Memory: no data";
@@ -367,13 +390,14 @@ class MemoryController implements vscode.Disposable {
       if (!repository) throw new Error("Cannot infer owner/repository from the origin remote");
       const configuredData = this.configuration().get<string>("dataDirectory", "").trim();
       const dataDirectory = configuredData ? (isAbsolute(configuredData) ? configuredData : resolve(root, configuredData)) : join(root, "data");
+      const apiUrl = this.configuration().get<string>("apiUrl", "").trim();
       const diff = await stagedDiff(root);
       if (!diff.trim()) {
         this.status.text = "$(shield-check) Memory: nothing staged";
         return;
       }
       this.status.text = "$(sync~spin) Memory checking";
-      const result = await validateMemory(repository, diff, dataDirectory);
+      const result = await validateMemory(repository, diff, dataDirectory, apiUrl, await this.githubToken(false));
       const filtered = applySafeguards(result.findings, this.safeguardSettings());
       this.diagnostics.clear();
       const grouped = new Map<string, PredictedFeedback[]>();
@@ -403,7 +427,7 @@ class MemoryController implements vscode.Disposable {
         return;
       }
       const diff = await diffForFile(context.root, document.uri.fsPath, document.getText());
-      const result = await validateMemory(context.repository, diff, context.dataDirectory);
+      const result = await validateMemory(context.repository, diff, context.dataDirectory, context.apiUrl, await this.githubToken(false));
       const settings = this.safeguardSettings();
       const safeguardResult = diagnoseSafeguards(result.findings, settings);
       const path = diffPath(context.root, document.uri.fsPath);
@@ -413,6 +437,7 @@ class MemoryController implements vscode.Disposable {
       this.output.appendLine(`Workspace trusted: yes`);
       this.output.appendLine(`Repository: ${context.repository}`);
       this.output.appendLine(`Data directory: ${context.dataDirectory}`);
+      this.output.appendLine(`API endpoint: ${context.apiUrl || "local JSON"}`);
       this.output.appendLine(`File: ${path}`);
       this.output.appendLine(`Git diff detected: ${diff.trim() ? "yes" : "no"}`);
       this.output.appendLine(`Added lines inspected: ${countAddedLines(diff)}`);
@@ -461,12 +486,13 @@ class MemoryController implements vscode.Disposable {
     this.output.appendLine("==============================================");
     try {
       const context = await this.contextForFolder(folder);
-      const snapshot = await loadMemory(context.repository, context.dataDirectory);
+      const snapshot = await loadMemory(context.repository, context.dataDirectory, context.apiUrl, await this.githubToken(false));
       const conventions = [...snapshot.conventions].sort(
         (left, right) => right.confidence - left.confidence || right.supportingEpisodes.length - left.supportingEpisodes.length
       );
       this.output.appendLine(`Repository: ${snapshot.repository}`);
       this.output.appendLine(`Data directory: ${context.dataDirectory}`);
+      this.output.appendLine(`API endpoint: ${context.apiUrl || "local JSON"}`);
       this.output.appendLine(`Conventions loaded: ${conventions.length}`);
       if (!conventions.length) {
         this.output.appendLine("");

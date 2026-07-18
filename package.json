@@ -7,12 +7,21 @@
     "packages/*"
   ],
   "scripts": {
+    "db:generate": "npm run db:generate --workspace=@ht6/extraction",
+    "db:up": "docker compose up -d --wait db",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f db",
+    "db:migrate": "npm run db:migrate --workspace=@ht6/extraction",
+    "db:setup": "npm run db:up && npm run db:migrate",
+    "prebuild": "npm run db:generate",
     "build": "tsc -b",
+    "pretypecheck": "npm run db:generate",
     "typecheck": "tsc -b --force",
     "test": "vitest run",
     "ingest": "npm run start --workspace=@ht6/ingestion --",
     "extract": "npm run start --workspace=@ht6/extraction --",
     "mcp-server": "npm run start --workspace=@ht6/mcp-server --",
+    "api-server": "npm run start --workspace=@ht6/api-server --",
     "review-check": "tsx packages/mcp-server/src/precommit.ts",
     "hooks:install": "git config core.hooksPath .githooks",
     "webhook-server": "npm run start --workspace=@ht6/webhook-server --",
@@ -20,8 +29,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.5.0",
     "tsx": "^4.16.0",
-    "vitest": "^2.0.0"
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.10"
   }
 }

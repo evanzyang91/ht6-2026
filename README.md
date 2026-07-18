@@ -111,6 +111,10 @@ placeholders naming the success criteria), `package.json`, and `tsconfig.json`.
 ```bash
 npm install
 cp .env.example .env   # fill in GITHUB_TOKEN
+cp packages/extraction/.env.example packages/extraction/.env
+
+npm run db:setup                    # local PostgreSQL + Prisma migrations
+npm run api-server                  # authenticated GraphQL API on :8790
 
 npm run ingest -- owner/repository   # stage 1
 npm run extract                      # stage 2
@@ -146,6 +150,9 @@ target is documented in [docs/schema.sql](./docs/schema.sql).
 ## Development
 
 ```bash
+npm run db:up       # start local PostgreSQL and wait for health
+npm run db:migrate  # apply the extraction-owned Prisma schema
+npm run db:down     # stop PostgreSQL; the named volume keeps its data
 npm run build       # tsc -b across all packages
 npm run test         # vitest across all packages
 npm run typecheck    # full rebuild, surfaces type errors

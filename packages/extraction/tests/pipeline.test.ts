@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, it } from "vitest";
 import { runExtraction } from "../src/pipeline.js";
+import type { ExtractionPublisher, ExtractionSnapshot } from "../src/storage/types.js";
 
 // data/raw-comments.json now holds the RawComment union (inline + review-summary +
 // conversation). Only inline (code-anchored) comments should reach hunk-linking/clustering —
@@ -44,8 +45,19 @@ it("only extracts episodes from inline comments, ignoring review-summary and con
     },
   ]));
 
-  const result = await runExtraction(dataDir);
+  let published: ExtractionSnapshot | undefined;
+  const publisher: ExtractionPublisher = {
+    async publish(snapshot) {
+      published = snapshot;
+      return { repositoryCount: 1 };
+    },
+  };
+  const result = await runExtraction(dataDir, undefined, publisher);
   expect(result.episodeCount).toBe(1);
+  expect(result.publishedRepositoryCount).toBe(1);
+  expect(published?.comments).toHaveLength(1);
+  expect(published?.episodes).toHaveLength(1);
+  expect(published?.conventions).toHaveLength(1);
 
   const episodes = JSON.parse(await readFile(join(dataDir, "episodes.json"), "utf8")) as Array<{ id: string }>;
   expect(episodes).toHaveLength(1);

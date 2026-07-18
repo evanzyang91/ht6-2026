@@ -6,8 +6,9 @@ import {
 } from "@ht6/pipeline";
 import type { Convention } from "@ht6/shared";
 import { ingest, type IngestionProgress } from "@ht6/ingestion";
-import { runExtraction } from "@ht6/extraction";
+import { runConfiguredExtraction } from "@ht6/extraction";
 import { JsonConventionStore } from "./store/jsonConventionStore.js";
+import { createConventionStore, type ConventionStore } from "./store/conventionStore.js";
 import { validateAgainstDiff, type PredictedFeedback } from "./validation/index.js";
 import { resolve } from "node:path";
 
@@ -39,14 +40,30 @@ export interface MemoryInitializationResult {
   conventionCount: number;
 }
 
+function conventionStore(dataDirectory: string, provided?: ConventionStore): ConventionStore {
+  if (provided) return provided;
+  if (process.env.DATABASE_READ_URL ?? process.env.DATABASE_URL) return createConventionStore();
+  return new JsonConventionStore(resolve(dataDirectory, "conventions.json"));
+}
+
 export async function inspectRepositoryMemory(
   repository: string,
-  options: { dataDirectory?: string } = {},
+  options: { dataDirectory?: string; store?: ConventionStore } = {},
 ): Promise<RepositoryMemoryInspection> {
   const dataDirectory = options.dataDirectory ?? process.env.DATA_DIR ?? "data";
+  const store = conventionStore(dataDirectory, options.store);
+  if (store.inspect) {
+    const inspection = await store.inspect(repository);
+    const status: RepositoryMemoryStatus = inspection.failed
+      ? "failed"
+      : inspection.conventionCount > 0
+        ? "ready"
+        : inspection.processed ? "empty" : "unprocessed";
+    return { repository, status, conventionCount: inspection.conventionCount, lastError: inspection.lastError };
+  }
   const [state, conventions] = await Promise.all([
     loadPipelineState(dataDirectory),
-    new JsonConventionStore(resolve(dataDirectory, "conventions.json")).all(repository),
+    store.all(repository),
   ]);
   const repositoryState = state[repository];
   let status: RepositoryMemoryStatus;
@@ -65,6 +82,7 @@ export async function initializeRepositoryMemory(
     token: string;
     dataDirectory?: string;
     limit?: number;
+    store?: ConventionStore;
     onProgress?: (progress: MemoryInitializationProgress) => void;
   },
 ): Promise<MemoryInitializationResult> {
@@ -83,10 +101,10 @@ export async function initializeRepositoryMemory(
       total: 1,
       message: "Compiling repository conventions…",
     });
-    const extraction = await runExtraction(dataDirectory);
+    const extraction = await runConfiguredExtraction(dataDirectory);
     const state = await loadPipelineState(dataDirectory);
     await markRepositoryExtracted(repository, state[repository]?.ingestionVersion ?? 0, dataDirectory);
-    const snapshot = await loadRepositoryMemory(repository, { dataDirectory });
+    const snapshot = await loadRepositoryMemory(repository, { dataDirectory, store: options.store });
     return {
       repository,
       commentCount: comments.length,
@@ -130,11 +148,12 @@ export async function refreshRepositoryMemory(
 /** Read-only snapshot used by editor integrations to explain the currently compiled memory. */
 export async function loadRepositoryMemory(
   repository: string,
-  options: { dataDirectory?: string } = {},
+  options: { dataDirectory?: string; store?: ConventionStore } = {},
 ): Promise<EngineeringMemorySnapshot> {
   const dataDirectory = options.dataDirectory ?? process.env.DATA_DIR ?? "data";
-  await ensureMemoryFresh(repository, dataDirectory);
-  const conventions = await new JsonConventionStore(resolve(dataDirectory, "conventions.json")).all(repository);
+  const store = conventionStore(dataDirectory, options.store);
+  if (!store.inspect) await ensureMemoryFresh(repository, dataDirectory);
+  const conventions = await store.all(repository);
   return { repository, conventions };
 }
 
@@ -142,10 +161,10 @@ export async function loadRepositoryMemory(
 export async function validateRepositoryDiff(
   repository: string,
   diff: string,
-  options: { dataDirectory?: string } = {},
+  options: { dataDirectory?: string; store?: ConventionStore } = {},
 ): Promise<EngineeringMemoryValidationResult> {
   const dataDirectory = options.dataDirectory ?? process.env.DATA_DIR ?? "data";
-  const { conventions } = await loadRepositoryMemory(repository, { dataDirectory });
+  const { conventions } = await loadRepositoryMemory(repository, { dataDirectory, store: options.store });
   return { conventionCount: conventions.length, findings: await validateAgainstDiff(conventions, diff) };
 }
 

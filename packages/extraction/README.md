@@ -10,7 +10,43 @@ npm run extract
 ```
 
 Reads `data/raw-comments.json` (`RawReviewComment[]`), writes `data/episodes.json`
-(`ReviewEpisode[]`) and `data/conventions.json` (`Convention[]`).
+(`ReviewEpisode[]`) and `data/conventions.json` (`Convention[]`). If `DATABASE_URL` is set,
+the same command also publishes the derived memory to PostgreSQL. Ingestion never receives or
+uses the database credential.
+
+## PostgreSQL persistence
+
+Copy `.env.example` to `.env`, set the extraction database URL, then run:
+
+```bash
+cp packages/extraction/.env.example packages/extraction/.env
+npm run db:setup
+npm run extract
+```
+
+`db:setup` starts the local PostgreSQL 18 container, waits until it is healthy, and applies the
+Prisma migrations. The named Docker volume preserves data across `npm run db:down` and ordinary
+container recreation.
+
+In production, set `DATABASE_URL` to the pooled application connection and `DIRECT_URL` to the
+direct or session connection used by migrations. Deploy with `npm run db:deploy
+--workspace=@ht6/extraction`; Docker Compose is only for local development.
+
+The database stores immutable `ExtractionRun`s. Each run owns its episodes, conventions, and
+normalized evidence links. Publication changes `Repository.activeExtractionRunId` in the same
+transaction that completes the run, so readers see either the previous complete memory or the
+new complete memory—never a partially written rebuild. Analyzer and input versions are retained
+for auditability and future deterministic/model/Freesolo comparisons.
+
+Useful commands:
+
+```bash
+npm run db:validate --workspace=@ht6/extraction
+npm run db:generate --workspace=@ht6/extraction
+npm run db:studio --workspace=@ht6/extraction
+npm run db:logs
+npm run db:down
+```
 
 ## Semantic analyzer seam
 
