@@ -1,4 +1,5 @@
 import type { ReviewEpisode } from "@ht6/shared";
+import type { SemanticAnalysis } from "../semantic/types.js";
 
 // Groups ReviewEpisodes that represent the same underlying convention, so
 // buildConventions() can turn each cluster into one Convention with confidence =
@@ -9,10 +10,14 @@ import type { ReviewEpisode } from "@ht6/shared";
 // fine on text; others are context-dependent ("fix this", "same as above") and are only
 // distinguishable by the code pattern they're attached to. Embedding/comparing the pair
 // jointly handles both cases without needing to classify comment type up front.
-export function clusterEpisodes(episodes: ReviewEpisode[]): ReviewEpisode[][] {
+export function clusterEpisodes(
+  episodes: ReviewEpisode[],
+  semantics: ReadonlyMap<string, SemanticAnalysis> = new Map()
+): ReviewEpisode[][] {
   const stop = new Set(["this", "that", "with", "from", "have", "should", "could", "would", "please", "here", "there", "instead"]);
   const tokens = (episode: ReviewEpisode) => new Set(
-    `${episode.reviewComment} ${episode.rejectedCode}`.toLowerCase().match(/[a-z_$][\w$]{2,}/g)
+    `${semantics.get(episode.id)?.rule ?? episode.reviewComment} ${episode.rejectedCode} ${episode.acceptedCode ?? ""}`
+      .toLowerCase().match(/[a-z_$][\w$]{2,}/g)
       ?.filter((word) => !stop.has(word)) ?? []
   );
   const similarity = (a: Set<string>, b: Set<string>) => {
@@ -25,7 +30,7 @@ export function clusterEpisodes(episodes: ReviewEpisode[]): ReviewEpisode[][] {
     const match = clusters.find((cluster) =>
       cluster[0].repository === episode.repository &&
       cluster[0].intent === episode.intent &&
-      similarity(tokens(cluster[0]), episodeTokens) >= 0.35
+      cluster.some((candidate) => similarity(tokens(candidate), episodeTokens) >= 0.35)
     );
     if (match) match.push(episode); else clusters.push([episode]);
   }
