@@ -5,10 +5,16 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -b",
     "start": "tsx src/cli.ts",
-    "test": "vitest run"
+    "test": "vitest run --root ../.. packages/extraction/tests"
   },
   "dependencies": {
     "@ht6/shared": "*"
