@@ -20,6 +20,7 @@ export async function fetchReviewComments(
     return response.data;
   });
   return comments.map((comment) => ({
+    type: "inline" as const,
     repository: `${owner}/${repo}`,
     pullRequest,
     commentId: String(comment.id),

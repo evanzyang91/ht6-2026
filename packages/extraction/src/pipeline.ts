@@ -3,6 +3,7 @@ import {
   DEFAULT_DATA_DIR,
   EPISODES_FILE,
   RAW_COMMENTS_FILE,
+  type RawComment,
   type RawReviewComment,
 } from "@ht6/shared";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
@@ -32,7 +33,15 @@ export async function runExtraction(
   const dataDir = resolve(dataDirectory);
   const parsed: unknown = JSON.parse(await readFile(resolve(dataDir, RAW_COMMENTS_FILE), "utf8"));
   if (!Array.isArray(parsed)) throw new Error(`${RAW_COMMENTS_FILE} must contain a JSON array`);
-  const comments = parsed as RawReviewComment[];
+  // RAW_COMMENTS_FILE now also holds review-summary and conversation comments (RawComment
+  // union) alongside inline ones. Neither has a file/diff to anchor evidence to, so they're
+  // excluded here rather than fed through hunk-linking — a natural extension point once this
+  // pipeline is ready to derive episodes from them too. Records with no `type` at all predate
+  // the three-way split and are treated as inline, same as before.
+  const comments = (parsed as RawComment[]).filter(
+    (comment): comment is RawReviewComment =>
+      comment.type !== "review-summary" && comment.type !== "conversation"
+  );
   const { episodes, conventions } = await extractComments(comments, analyzer);
 
   await mkdir(dataDir, { recursive: true });

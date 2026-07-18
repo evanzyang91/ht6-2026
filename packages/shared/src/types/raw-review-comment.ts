@@ -1,6 +1,12 @@
-// Stage 1 (ingestion) output. One record per PR review comment, plus enough context to
-// reconstruct the diff it was left on. Persisted to data/raw-comments.json.
+// Stage 1 (ingestion) output. One record per inline PR review comment (anchored to a diff
+// line), plus enough context to reconstruct the diff it was left on. Persisted alongside
+// ReviewSummaryComment and ConversationComment in data/raw-comments.json — see raw-comment.ts
+// for the RawComment union and how to tell the three apart.
+//
+// `type` is optional (defaults to "inline" when absent) so existing fixtures/consumers that
+// predate the three-way split keep working unchanged; new code should set it explicitly.
 export interface RawReviewComment {
+  type?: "inline";
   repository: string;
   pullRequest: number;
   commentId: string;

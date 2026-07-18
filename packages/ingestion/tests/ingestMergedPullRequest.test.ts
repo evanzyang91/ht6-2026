@@ -4,6 +4,8 @@ const fetchMergedPullRequest = vi.fn();
 const fetchReviewComments = vi.fn();
 const fetchChangedFilesAndPatches = vi.fn();
 const fetchFileContentAtRef = vi.fn();
+const fetchReviewSummaries = vi.fn();
+const fetchConversationComments = vi.fn();
 const storeLoad = vi.fn();
 const storeSave = vi.fn();
 const markRepositoryIngested = vi.fn();
@@ -21,6 +23,12 @@ vi.mock("../src/github/fetchPatches.js", () => ({
 vi.mock("../src/github/fetchFileContent.js", () => ({
   fetchFileContentAtRef: (...args: unknown[]) => fetchFileContentAtRef(...args),
 }));
+vi.mock("../src/github/fetchReviewSummaries.js", () => ({
+  fetchReviewSummaries: (...args: unknown[]) => fetchReviewSummaries(...args),
+}));
+vi.mock("../src/github/fetchConversationComments.js", () => ({
+  fetchConversationComments: (...args: unknown[]) => fetchConversationComments(...args),
+}));
 vi.mock("../src/storage/index.js", () => ({
   createStore: () => ({ load: storeLoad, save: storeSave }),
 }));
@@ -33,6 +41,7 @@ const { ingestMergedPullRequest } = await import("../src/ingest.js");
 const basePr = { number: 42, title: "Fix thing", mergedAt: "2026-01-01T00:00:00Z", mergeCommitSha: "merge-sha" };
 
 const baseComment = {
+  type: "inline" as const,
   repository: "acme/api",
   pullRequest: 42,
   commentId: "c1",
@@ -47,6 +56,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   fetchFileContentAtRef.mockResolvedValue(undefined);
   fetchChangedFilesAndPatches.mockResolvedValue([]);
+  fetchReviewSummaries.mockResolvedValue([]);
+  fetchConversationComments.mockResolvedValue([]);
   storeLoad.mockResolvedValue([]);
 });
 
@@ -73,7 +84,7 @@ describe("ingestMergedPullRequest", () => {
     expect(markRepositoryIngested).toHaveBeenCalledWith("acme/api", 42, undefined, { changed: true });
   });
 
-  it("handles a merged PR with zero review comments without crashing", async () => {
+  it("handles a merged PR with zero comments of any type without crashing", async () => {
     fetchMergedPullRequest.mockResolvedValue(basePr);
     fetchReviewComments.mockResolvedValue([]);
 
@@ -108,5 +119,49 @@ describe("ingestMergedPullRequest", () => {
 
     const result = await ingestMergedPullRequest("acme/api", 42);
     expect(result).toHaveLength(1);
+  });
+
+  it("collects all three comment types for one PR, each tagged and carrying PR-level context", async () => {
+    fetchMergedPullRequest.mockResolvedValue(basePr);
+    fetchReviewComments.mockResolvedValue([baseComment]);
+    fetchReviewSummaries.mockResolvedValue([{
+      type: "review-summary" as const,
+      repository: "acme/api",
+      pullRequest: 42,
+      commentId: "review-1",
+      reviewer: "pat",
+      body: "Looks good overall, minor nits inline.",
+      createdAt: "2026-01-01T00:05:00Z",
+      reviewState: "APPROVED",
+      reviewCommitSha: "orig-sha",
+    }]);
+    fetchConversationComments.mockResolvedValue([{
+      type: "conversation" as const,
+      repository: "acme/api",
+      pullRequest: 42,
+      commentId: "convo-1",
+      reviewer: "casey",
+      body: "Do we need a migration for this?",
+      createdAt: "2026-01-01T00:02:00Z",
+      authorAssociation: "MEMBER",
+    }]);
+
+    const result = await ingestMergedPullRequest("acme/api", 42);
+
+    expect(result).toHaveLength(3);
+    const byType = Object.fromEntries(result.map((c) => [c.type, c]));
+    expect(byType.inline).toMatchObject({ commentId: "c1", mergedCommitSha: "merge-sha", pullRequestTitle: "Fix thing" });
+    expect(byType["review-summary"]).toMatchObject({
+      commentId: "review-1",
+      reviewState: "APPROVED",
+      mergedCommitSha: "merge-sha",
+      pullRequestTitle: "Fix thing",
+    });
+    expect(byType.conversation).toMatchObject({
+      commentId: "convo-1",
+      authorAssociation: "MEMBER",
+      mergedCommitSha: "merge-sha",
+      pullRequestTitle: "Fix thing",
+    });
   });
 });

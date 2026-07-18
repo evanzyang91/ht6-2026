@@ -8,7 +8,7 @@ rather than redefining shapes locally.
 
 | File                      | Written by            | Read by                          | Shape                                  |
 |---------------------------|------------------------|-----------------------------------|-----------------------------------------|
-| `data/raw-comments.json`  | `@ht6/ingestion`       | `@ht6/extraction`                 | `RawReviewComment[]`                    |
+| `data/raw-comments.json`  | `@ht6/ingestion`       | `@ht6/extraction`                 | `RawComment[]` (union — see below)      |
 | `data/episodes.json`      | `@ht6/extraction`      | `@ht6/extraction` (clustering step) | `ReviewEpisode[]`                     |
 | `data/conventions.json`   | `@ht6/extraction`      | `@ht6/mcp-server`                  | `Convention[]`                          |
 | `data/pipeline-state.json`| webhook/pipeline       | `@ht6/pipeline`                    | repository freshness watermarks         |
@@ -17,3 +17,15 @@ rather than redefining shapes locally.
 Each file is a flat JSON array (`webhook-deliveries.json` is a flat array of delivery id strings,
 capped at the 2000 most recent). A relational production target is defined in
 [`schema.sql`](./schema.sql); the JSON boundary remains useful for hackathon parallelism and fixtures.
+
+### `RawComment` — three tagged shapes in one array
+
+`data/raw-comments.json` holds three kinds of PR comment, distinguished by a `type` field:
+
+| `type` | Source | Has file/diff context? | Notes |
+|---|---|---|---|
+| `"inline"` | `pulls.listReviewComments` | Yes — `filePath`, `diffHunk`, `acceptedFilePatch`, `reviewedFileContent`, `mergedFileContent` | The only type extraction currently processes. `type` is optional here for backward compatibility — an entry with no `type` at all is treated as inline. |
+| `"review-summary"` | `pulls.listReviews` | No | The overall verdict text from a submitted review (`reviewState`: APPROVED/CHANGES_REQUESTED/COMMENTED/DISMISSED). Reviews with no summary text or still `PENDING` are not ingested. |
+| `"conversation"` | `issues.listComments` | No | General PR conversation-tab comments, not tied to a review or diff line. Carries `authorAssociation` (OWNER/MEMBER/etc) as an authority signal. |
+
+All three carry the shared PR-level context fields (`pullRequestTitle`, `mergedAt`, `mergedCommitSha`) alongside their own `commentId`/`reviewer`/`body`/`createdAt`. `@ht6/extraction`'s read boundary (`pipeline.ts`) filters to `type !== "review-summary" && type !== "conversation"` before running hunk-linking — the other two types are persisted but not yet fed through convention extraction, since there's no code to anchor them to. That's a deliberate extension point, not an oversight.
