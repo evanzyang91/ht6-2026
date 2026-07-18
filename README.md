@@ -116,7 +116,20 @@ npm run ingest -- owner/repository   # stage 1
 npm run extract                      # stage 2
 npm run mcp-server                   # stage 3
 npm run webhook-server               # merge-only GitHub webhook listener
+npm run review-check                 # validate the staged diff against engineering memory
 ```
+
+Install the tracked pre-commit review gate once with `npm run hooks:install`. It blocks commits whose
+staged additions match high-confidence historical review violations. Configure its threshold and
+missing-memory behavior in `.env.example`; see the MCP package README for details.
+
+## VS Code extension
+
+The bare-bones popup-driven editor assistant validates only Git-changed lines on save and staged
+changes on demand. Save-time results stay in Problems; a blocked pre-commit check produces one
+safeguarded popup with a Review action. Install the hook with `npm run hooks:install`, build the
+extension with `npm run vscode:build`, then launch **Engineering Memory Extension**
+from Run and Debug. See [`packages/vscode-extension/README.md`](./packages/vscode-extension/README.md).
 
 ## Merge-only continuous memory
 

@@ -10,13 +10,18 @@ const memory: Convention = {
 };
 
 it("flags a scoped added line and returns historical evidence", async () => {
-  const diff = "diff --git a/src/controllers/user.ts b/src/controllers/user.ts\n+++ b/src/controllers/user.ts\n@@ -1 +1 @@\n+const users = await prisma.user.findMany();";
+  const diff = "diff --git a/src/controllers/user.ts b/src/controllers/user.ts\n+++ b/src/controllers/user.ts\n@@ -10 +10 @@\n+const users = await prisma.user.findMany();";
   const findings = await validateAgainstDiff([memory], diff);
-  expect(findings[0]).toMatchObject({ matchedPath: "src/controllers/user.ts", supportingPRs: [12] });
+  expect(findings[0]).toMatchObject({ conventionId: "prisma", matchedPath: "src/controllers/user.ts", matchedLine: 10, supportCount: 1, supportingPRs: [12] });
 });
 
 it("does not flag unrelated code", async () => {
   const diff = "+++ b/src/controllers/user.ts\n+return userService.list();";
+  expect(await validateAgainstDiff([memory], diff)).toEqual([]);
+});
+
+it("does not apply a convention to a different language", async () => {
+  const diff = "+++ b/src/controllers/user.py\n@@ -1 +1 @@\n+prisma.user.findMany()";
   expect(await validateAgainstDiff([memory], diff)).toEqual([]);
 });
 

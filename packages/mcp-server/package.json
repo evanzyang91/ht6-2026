@@ -4,8 +4,16 @@
   "private": true,
   "type": "module",
   "main": "./dist/server.js",
+  "exports": {
+    ".": "./dist/server.js",
+    "./api": {
+      "types": "./dist/api.d.ts",
+      "default": "./dist/api.js"
+    }
+  },
   "scripts": {
     "build": "tsc -b",
+    "review-check": "tsx src/precommit.ts",
     "start": "tsx src/server.ts",
     "test": "vitest run"
   },

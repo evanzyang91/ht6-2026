@@ -8,6 +8,40 @@ Serves the extracted `Convention`s to coding agents over MCP.
 npm run mcp-server
 ```
 
+## Pre-commit review gate
+
+Install the repository-managed hook once:
+
+```bash
+npm run hooks:install
+```
+
+The hook runs `npm run review-check`, reads `git diff --cached`, refreshes stale engineering memory,
+and validates only the changes included in the pending commit. Findings block only when they meet the
+confidence threshold and have enough distinct supporting PRs. The hook prints their rule, matched
+path, reason, supporting PRs, and an accepted example. When VS Code is open, it also publishes a
+local `data/commit-review.json` event that the extension turns into one notification.
+
+```dotenv
+# Optional: inferred from the origin remote by default.
+ENGINEERING_MEMORY_REPOSITORY=owner/repository
+ENGINEERING_MEMORY_BLOCK_THRESHOLD=0.8
+ENGINEERING_MEMORY_BLOCK_MIN_SUPPORT=2
+
+# false lets a repository with no compiled conventions commit with a warning.
+ENGINEERING_MEMORY_REQUIRE_DATA=false
+```
+
+Run it manually at any time:
+
+```bash
+git add path/to/files
+npm run review-check
+```
+
+The deterministic gate checks known prohibited signals and applicable path scopes. It does not claim
+to replace human review or detect conventions that have not yet been compiled into memory.
+
 Reads `data/conventions.json` (`Convention[]`, written by `@ht6/extraction`) via
 `src/store/`.
 

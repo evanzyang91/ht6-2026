@@ -6,6 +6,7 @@
     { "path": "packages/pipeline" },
     { "path": "packages/ingestion" },
     { "path": "packages/mcp-server" },
-    { "path": "packages/webhook-server" }
+    { "path": "packages/webhook-server" },
+    { "path": "packages/vscode-extension" }
   ]
 }

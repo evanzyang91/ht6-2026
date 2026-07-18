@@ -1,0 +1,102 @@
+{
+  "name": "engineering-memory-vscode",
+  "displayName": "Engineering Memory",
+  "description": "Shows evidence-backed repository conventions on changed code.",
+  "publisher": "engineering-memory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "extensionKind": ["workspace"],
+  "main": "./dist/extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@ht6/mcp-server": "*"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.125.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "engineeringMemory.validateCurrentFile",
+        "title": "Engineering Memory: Validate Current File"
+      },
+      {
+        "command": "engineeringMemory.validateStagedChanges",
+        "title": "Engineering Memory: Validate Staged Changes"
+      },
+      {
+        "command": "engineeringMemory.showEvidence",
+        "title": "Engineering Memory: Show Evidence"
+      },
+      {
+        "command": "engineeringMemory.muteConvention",
+        "title": "Engineering Memory: Mute Convention"
+      }
+    ],
+    "configuration": {
+      "title": "Engineering Memory",
+      "properties": {
+        "engineeringMemory.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Validate Git-changed lines when a file is saved."
+        },
+        "engineeringMemory.repository": {
+          "type": "string",
+          "default": "",
+          "description": "Repository slug (owner/repository). Inferred from origin when empty."
+        },
+        "engineeringMemory.dataDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "Engineering Memory data directory. Defaults to <workspace>/data."
+        },
+        "engineeringMemory.minimumConfidence": {
+          "type": "number",
+          "default": 0.8,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Minimum extraction confidence required for an editor warning."
+        },
+        "engineeringMemory.minimumPullRequestSupport": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "description": "Minimum distinct supporting pull requests required for an editor warning."
+        },
+        "engineeringMemory.maximumDiagnosticsPerFile": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Maximum convention warnings displayed in one file."
+        },
+        "engineeringMemory.popupEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show one warning popup when the pre-commit Engineering Memory check blocks a commit."
+        },
+        "engineeringMemory.popupCooldownSeconds": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 10,
+          "maximum": 3600,
+          "description": "Minimum time for suppressing duplicate filesystem events from the same blocked commit attempt."
+        },
+        "engineeringMemory.mutedConventionIds": {
+          "type": "array",
+          "default": [],
+          "items": { "type": "string" },
+          "description": "Convention IDs hidden in this workspace."
+        }
+      }
+    }
+  }
+}

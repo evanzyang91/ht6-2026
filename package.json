@@ -13,7 +13,10 @@
     "ingest": "npm run start --workspace=@ht6/ingestion --",
     "extract": "npm run start --workspace=@ht6/extraction --",
     "mcp-server": "npm run start --workspace=@ht6/mcp-server --",
-    "webhook-server": "npm run start --workspace=@ht6/webhook-server --"
+    "review-check": "tsx packages/mcp-server/src/precommit.ts",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "webhook-server": "npm run start --workspace=@ht6/webhook-server --",
+    "vscode:build": "npm run build --workspace=engineering-memory-vscode"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
