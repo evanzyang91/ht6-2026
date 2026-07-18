@@ -13,7 +13,7 @@ data/episodes.json          ReviewEpisode[]
 data/conventions.json       Convention[]
     │  (packages/mcp-server)
     ▼
-MCP tools: get_repo_conventions, predict_review_feedback
+MCP tools: conventions, rejected patterns, prediction, explanation, reviewer history
 ```
 
 ## Stage 1 — Ingestion (`@ht6/ingestion`)

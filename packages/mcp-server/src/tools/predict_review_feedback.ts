@@ -1,11 +1,9 @@
-// MCP tool: predict_review_feedback
-// Input: { repository: string, diff: string }
-// Output: PredictedFeedback[] (see validation/index.ts) — compact, evidence-backed findings
-// like { rule, confidence, matchedPath, reason, supportingPRs, acceptedExamples }.
-//
-// TODO: define the MCP tool schema and handler, delegating to validateAgainstDiff().
+import type { ConventionStore } from "../store/conventionStore.js";
+import { validateAgainstDiff } from "../validation/index.js";
 
-export const predictReviewFeedbackTool = {
-  name: "predict_review_feedback",
-  // TODO: inputSchema, handler
-};
+export async function predictReviewFeedback(
+  store: ConventionStore,
+  input: { repository: string; diff: string },
+) {
+  return validateAgainstDiff(await store.all(input.repository), input.diff);
+}

@@ -12,6 +12,5 @@ rather than redefining shapes locally.
 | `data/episodes.json`      | `@ht6/extraction`      | `@ht6/extraction` (clustering step) | `ReviewEpisode[]`                     |
 | `data/conventions.json`   | `@ht6/extraction`      | `@ht6/mcp-server`                  | `Convention[]`                          |
 
-Each file is a flat JSON array. A SQLite-backed store is a possible future swap (see the
-`*Store` interfaces in each package's `storage/`/`store/` directory) — schema TBD, not part of
-this scaffold.
+Each file is a flat JSON array. A relational production target is defined in
+[`schema.sql`](./schema.sql); the JSON boundary remains useful for hackathon parallelism and fixtures.

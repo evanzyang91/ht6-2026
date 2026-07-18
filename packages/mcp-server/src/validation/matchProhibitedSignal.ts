@@ -1,6 +1,9 @@
 import type { Convention } from "@ht6/shared";
 
-// TODO: check whether detected imports/calls in a diff match a Convention's prohibitedSignals.
+// Matches normalized detected code signals against historically prohibited signals.
 export function matchesProhibitedSignal(convention: Convention, signals: string[]): boolean {
-  throw new Error("not implemented");
+  return convention.prohibitedSignals.some((prohibited) => {
+    const needle = prohibited.toLowerCase();
+    return needle.length >= 3 && signals.some((signal) => signal.toLowerCase().includes(needle));
+  });
 }

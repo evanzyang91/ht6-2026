@@ -1,17 +1,21 @@
 // Entry point for `npm run ingest -- owner/repository`.
 //
-// TODO: parse `owner/repository` (and any flags, e.g. --limit) from process.argv,
-// validate GITHUB_TOKEN is set, then call ingest() from ./ingest.ts.
+// Parses `owner/repository` and an optional --limit=N flag.
 
 import { ingest } from "./ingest.js";
 
 async function main(): Promise<void> {
-  // TODO: replace with real argv parsing.
   const target = process.argv[2];
   if (!target) {
     throw new Error("Usage: npm run ingest -- owner/repository");
   }
-  await ingest(target);
+  const limitFlag = process.argv.find((arg) => arg.startsWith("--limit="));
+  const limit = limitFlag ? Number(limitFlag.split("=")[1]) : 75;
+  const comments = await ingest(target, limit);
+  process.stderr.write(`Stored ${comments.length} review comments for ${target}\n`);
 }
 
-main();
+main().catch((error) => {
+  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.exitCode = 1;
+});

@@ -1,5 +1,15 @@
 // Stage 2 (extraction) final output / stage 3 (mcp-server) input. A generalized rule inferred
 // from one or more ReviewEpisodes. Persisted to data/conventions.json.
+export interface ConventionEvidence {
+  episodeId: string;
+  pullRequest: number;
+  reviewer: string;
+  filePath: string;
+  reviewComment: string;
+  rejectedCode: string;
+  acceptedCode?: string;
+}
+
 export interface Convention {
   id: string;
   repository: string;
@@ -13,4 +23,6 @@ export interface Convention {
   preferredSignals: string[];
   confidence: number;
   supportingEpisodes: string[];
+  /** Embedded, compact provenance so MCP responses never need to expose raw GitHub data. */
+  evidence: ConventionEvidence[];
 }

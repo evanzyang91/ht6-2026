@@ -1,10 +1,47 @@
 // Entry point for `npm run extract`.
 //
-// TODO: read data/raw-comments.json, run linking -> classification -> clustering,
-// write data/episodes.json and data/conventions.json.
+import type { RawReviewComment, ReviewEpisode } from "@ht6/shared";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { linkCommentToRejectedHunk } from "./linking/linkCommentsToHunks.js";
+import { findAcceptedFix } from "./linking/findAcceptedFix.js";
+import { scoreLinkageQuality } from "./linking/linkageQuality.js";
+import { classifyIntent } from "./classify/classifyIntent.js";
+import { buildConventions } from "./conventions.js";
 
 async function main(): Promise<void> {
-  throw new Error("not implemented");
+  const dataDir = resolve(process.env.DATA_DIR ?? "data");
+  const comments = JSON.parse(await readFile(resolve(dataDir, "raw-comments.json"), "utf8")) as RawReviewComment[];
+  const episodes: ReviewEpisode[] = comments.map((comment) => {
+    const rejectedCode = linkCommentToRejectedHunk(comment);
+    const acceptedCode = findAcceptedFix(comment);
+    return {
+      id: createHash("sha256").update(`${comment.repository}:${comment.commentId}`).digest("hex").slice(0, 16),
+      repository: comment.repository,
+      pullRequest: comment.pullRequest,
+      reviewer: comment.reviewer,
+      filePath: comment.filePath,
+      reviewComment: comment.body,
+      rejectedCode,
+      acceptedCode,
+      acceptedFixQuality: scoreLinkageQuality(rejectedCode, acceptedCode),
+      intent: classifyIntent(comment.body),
+      createdAt: comment.createdAt,
+    };
+  });
+  const conventions = buildConventions(episodes);
+  await mkdir(dataDir, { recursive: true });
+  for (const [name, value] of [["episodes.json", episodes], ["conventions.json", conventions]] as const) {
+    const target = resolve(dataDir, name);
+    const temp = `${target}.tmp`;
+    await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    await rename(temp, target);
+  }
+  process.stderr.write(`Extracted ${episodes.length} review episodes into ${conventions.length} conventions\n`);
 }
 
-main();
+main().catch((error) => {
+  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.exitCode = 1;
+});

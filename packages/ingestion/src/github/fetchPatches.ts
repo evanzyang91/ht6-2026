@@ -1,9 +1,20 @@
-// TODO: fetch changed files + patches for a PR, and the merged commit SHA, to backfill
-// RawReviewComment.mergedCommitSha and support stage 2's accepted-fix lookup.
+import { createGitHubClient } from "./client.js";
+import { paginateAll } from "./paginate.js";
+import { withRateLimitRetry } from "./rateLimit.js";
+
+export interface ChangedFilePatch { filePath: string; patch?: string }
+
 export async function fetchChangedFilesAndPatches(
   owner: string,
   repo: string,
   pullRequest: number
-) {
-  throw new Error("not implemented");
+): Promise<ChangedFilePatch[]> {
+  const client = createGitHubClient();
+  const files = await paginateAll(async (page) => {
+    const response = await withRateLimitRetry(() => client.pulls.listFiles({
+      owner, repo, pull_number: pullRequest, per_page: 100, page,
+    }));
+    return response.data;
+  });
+  return files.map((file) => ({ filePath: file.filename, patch: file.patch }));
 }

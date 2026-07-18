@@ -35,6 +35,9 @@ ambiguous cases. Returns compact, evidence-backed findings, e.g.:
 }
 ```
 
+Also exposed: `find_similar_rejected_patterns`, `explain_engineering_decision`, and
+`summarize_personal_review_history`.
+
 ## Layout
 
 - `src/server.ts` — MCP server bootstrap, registers tools from `src/tools/`.

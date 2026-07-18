@@ -1,10 +1,10 @@
 import type { Convention } from "@ht6/shared";
 
-// TODO (optional/stretch): score conventions against a query using embedding similarity
-// instead of/alongside textSimilarity.ts.
+// Optional provider seam. Retrieval does not call it unless an embedding provider is configured.
 export async function scoreByEmbeddingSimilarity(
   conventions: Convention[],
   query: string
 ): Promise<Map<string, number>> {
-  throw new Error("not implemented");
+  void query;
+  return new Map(conventions.map((convention) => [convention.id, 0]));
 }

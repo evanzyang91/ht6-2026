@@ -13,4 +13,5 @@ export interface ReviewEpisode {
   acceptedCode?: string;
   acceptedFixQuality: LinkageQuality;
   intent: string;
+  createdAt: string;
 }

@@ -1,10 +1,6 @@
-// MCP tool: get_repo_conventions
-// Input: { repository: string, path?: string, language?: string, query?: string }
-// Output: Convention[] (compact, ranked by retrieval/index.ts)
-//
-// TODO: define the MCP tool schema and handler, delegating to retrieveConventions().
+import type { ConventionStore } from "../store/conventionStore.js";
+import { retrieveConventions, type RetrievalQuery } from "../retrieval/index.js";
 
-export const getRepoConventionsTool = {
-  name: "get_repo_conventions",
-  // TODO: inputSchema, handler
-};
+export async function getRepoConventions(store: ConventionStore, input: RetrievalQuery) {
+  return retrieveConventions(store, input);
+}

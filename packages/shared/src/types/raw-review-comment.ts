@@ -12,4 +12,8 @@ export interface RawReviewComment {
   diffHunk?: string;
   createdAt: string;
   mergedCommitSha?: string;
+  /** Final PR patch for this file. Used to infer the code accepted at merge time. */
+  acceptedFilePatch?: string;
+  pullRequestTitle?: string;
+  mergedAt?: string;
 }

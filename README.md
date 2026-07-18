@@ -7,16 +7,16 @@ predicts what a human reviewer would flag on a given diff.
 
 ## Pipeline
 
-Three stages, one per owner, wired together via `data/` JSON files — not direct function calls.
+Three stages, wired together via `data/` JSON files — not direct function calls.
 Each stage reads the previous stage's JSON output and writes its own; nobody imports another
 stage's internals. See [docs/PIPELINE.md](./docs/PIPELINE.md) for the full data flow and
 [docs/DATA_FORMAT.md](./docs/DATA_FORMAT.md) for the interchange file shapes.
 
 | Stage | Package | Owner | Reads | Writes |
 |---|---|---|---|---|
-| 1. Ingestion | [`packages/ingestion`](./packages/ingestion) | Person 1 | GitHub API | `data/raw-comments.json` |
-| 2. Extraction | [`packages/extraction`](./packages/extraction) | Person 2 | `data/raw-comments.json` | `data/episodes.json`, `data/conventions.json` |
-| 3. Retrieval + MCP | [`packages/mcp-server`](./packages/mcp-server) | Person 3 | `data/conventions.json` | — (serves MCP tools) |
+| 1. Ingestion | [`packages/ingestion`](./packages/ingestion) | GitHub/data | GitHub API | `data/raw-comments.json` |
+| 2. Extraction | [`packages/extraction`](./packages/extraction) | Memory compiler | `data/raw-comments.json` | `data/episodes.json`, `data/conventions.json` |
+| 3. Retrieval + MCP | [`packages/mcp-server`](./packages/mcp-server) | Retrieval + MCP | `data/conventions.json` | — (serves MCP tools) |
 
 ## Repo structure
 
@@ -53,7 +53,7 @@ ht6-2026/
             ├── store/        ConventionStore interface + jsonConventionStore/sqliteConventionStore
             ├── retrieval/    filterByRepo, filterByScope, textSimilarity, embeddings, rank
             ├── validation/   parseDiff, detectImportsCalls, matchPathScope, matchProhibitedSignal, llmFallback
-            └── tools/        get_repo_conventions.ts, predict_review_feedback.ts
+            └── tools/        five engineering-memory MCP tools
 ```
 
 Every package also has its own `README.md` (usage + layout), `tests/` (currently `it.todo`
@@ -64,8 +64,8 @@ placeholders naming the success criteria), `package.json`, and `tsconfig.json`.
 - **The type contract** (what a `RawReviewComment`/`ReviewEpisode`/`Convention` looks like):
   [`packages/shared/src/types/`](./packages/shared/src/types/). Change a field here, not in the
   package that happens to produce or consume it.
-- **The two MCP tools**: [`packages/mcp-server/src/tools/`](./packages/mcp-server/src/tools/) —
-  `get_repo_conventions.ts` and `predict_review_feedback.ts`. Each just wires an MCP schema to
+- **The MCP tools**: [`packages/mcp-server/src/tools/`](./packages/mcp-server/src/tools/) —
+  convention retrieval, rejected-pattern search, diff prediction, decision explanation, and reviewer history. They wire MCP schemas to
   `retrieval/index.ts` or `validation/index.ts`; the actual logic lives in those folders.
 - **"Why did the MCP server flag/not flag this diff?"**:
   [`packages/mcp-server/src/validation/`](./packages/mcp-server/src/validation/) — diff parsing,
@@ -115,6 +115,10 @@ npm run ingest -- owner/repository   # stage 1
 npm run extract                      # stage 2
 npm run mcp-server                   # stage 3
 ```
+
+See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for the data model, retrieval decisions,
+Freesolo boundary, hackathon scope, and four-person ownership plan. The production relational
+target is documented in [docs/schema.sql](./docs/schema.sql).
 
 ## Development
 

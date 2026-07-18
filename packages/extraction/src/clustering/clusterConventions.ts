@@ -1,6 +1,6 @@
 import type { ReviewEpisode } from "@ht6/shared";
 
-// TODO: group ReviewEpisodes that represent the same underlying convention, so
+// Groups ReviewEpisodes that represent the same underlying convention, so
 // buildConventions() can turn each cluster into one Convention with confidence =
 // f(cluster size, linkage quality).
 //
@@ -10,5 +10,24 @@ import type { ReviewEpisode } from "@ht6/shared";
 // distinguishable by the code pattern they're attached to. Embedding/comparing the pair
 // jointly handles both cases without needing to classify comment type up front.
 export function clusterEpisodes(episodes: ReviewEpisode[]): ReviewEpisode[][] {
-  throw new Error("not implemented");
+  const stop = new Set(["this", "that", "with", "from", "have", "should", "could", "would", "please", "here", "there", "instead"]);
+  const tokens = (episode: ReviewEpisode) => new Set(
+    `${episode.reviewComment} ${episode.rejectedCode}`.toLowerCase().match(/[a-z_$][\w$]{2,}/g)
+      ?.filter((word) => !stop.has(word)) ?? []
+  );
+  const similarity = (a: Set<string>, b: Set<string>) => {
+    const intersection = [...a].filter((token) => b.has(token)).length;
+    return intersection / Math.max(1, Math.min(a.size, b.size));
+  };
+  const clusters: ReviewEpisode[][] = [];
+  for (const episode of episodes.filter((item) => item.intent !== "question-nonactionable")) {
+    const episodeTokens = tokens(episode);
+    const match = clusters.find((cluster) =>
+      cluster[0].repository === episode.repository &&
+      cluster[0].intent === episode.intent &&
+      similarity(tokens(cluster[0]), episodeTokens) >= 0.35
+    );
+    if (match) match.push(episode); else clusters.push([episode]);
+  }
+  return clusters;
 }

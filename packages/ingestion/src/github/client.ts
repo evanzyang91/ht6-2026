@@ -1,5 +1,7 @@
-// TODO: construct and export an authenticated GitHub API client using GITHUB_TOKEN.
-// Likely wraps @octokit/rest; keep this the single place that reads process.env.GITHUB_TOKEN.
-export function createGitHubClient() {
-  throw new Error("not implemented");
+import { Octokit } from "@octokit/rest";
+
+export function createGitHubClient(): Octokit {
+  const auth = process.env.GITHUB_TOKEN;
+  if (!auth) throw new Error("GITHUB_TOKEN is required to ingest GitHub history");
+  return new Octokit({ auth, userAgent: "engineering-memory-hackathon" });
 }

@@ -1,6 +1,7 @@
 import type { Convention } from "@ht6/shared";
 
-// TODO: filter conventions down to a specific repository.
+// Repository is a hard tenant boundary, not a ranking signal.
 export function filterByRepo(conventions: Convention[], repository: string): Convention[] {
-  throw new Error("not implemented");
+  const normalized = repository.toLowerCase();
+  return conventions.filter((convention) => convention.repository.toLowerCase() === normalized);
 }

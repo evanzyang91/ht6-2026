@@ -1,4 +1,5 @@
 import type { RawReviewComment } from "@ht6/shared";
+import { JsonStore } from "./jsonStore.js";
 
 // Persistence contract for ingested data. Swappable JSON <-> SQLite without touching
 // the rest of the ingestion package.
@@ -7,7 +8,7 @@ export interface Store {
   save(repository: string, comments: RawReviewComment[]): Promise<void>;
 }
 
-// TODO: pick JSON vs SQLite based on config/env and return the right implementation.
+// JSON is the supported hackathon store; this factory is the production adapter seam.
 export function createStore(): Store {
-  throw new Error("not implemented");
+  return new JsonStore();
 }
