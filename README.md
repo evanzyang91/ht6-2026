@@ -123,6 +123,12 @@ npm run webhook-server               # merge-only GitHub webhook listener
 npm run review-check                 # validate the staged diff against engineering memory
 ```
 
+Extraction is deterministic by default. A hosted deployment can enable the trained Freesolo
+adapter with the backend-only variables documented in
+[`packages/extraction/.env.example`](./packages/extraction/.env.example). Editor users do not need
+the model or database secrets; the backend owns provider selection, retries, response validation,
+and deterministic fallback.
+
 Install the tracked pre-commit review gate once with `npm run hooks:install`. It blocks commits whose
 staged additions match high-confidence historical review violations. Configure its threshold and
 missing-memory behavior in `.env.example`; see the MCP package README for details.

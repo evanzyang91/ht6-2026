@@ -54,9 +54,36 @@ Factual linking (diff hunks, accepted patches, linkage quality, and provenance) 
 the semantic processor. `SemanticAnalyzer` receives that evidence and returns normalized intent,
 rule, rationale, and prohibited/preferred code signals. The default
 `DeterministicSemanticAnalyzer` uses local heuristics and requires no model or network access.
+`FreesoloSemanticAnalyzer` calls a deployed adapter through its OpenAI-compatible `/v1` endpoint.
+Configured extraction selects the provider from environment variables; direct library calls remain
+deterministic unless an analyzer is explicitly supplied.
 
-Future hosted or post-trained analyzers implement the same asynchronous interface and can be
-passed to `extractComments(rawComments, analyzer)` without changing the interchange files.
+To enable Freesolo on a backend after deploying an adapter:
+
+```dotenv
+ENGINEERING_MEMORY_SEMANTIC_ANALYZER=freesolo
+ENGINEERING_MEMORY_SEMANTIC_FALLBACK=deterministic
+FREESOLO_BASE_URL=https://your-serving-endpoint.example/v1
+FREESOLO_MODEL=your-adapter-or-run-id
+FREESOLO_API_KEY=backend-only-secret
+FREESOLO_TIMEOUT_MS=15000
+FREESOLO_MAX_RETRIES=2
+FREESOLO_MAX_CONCURRENCY=4
+```
+
+Missing provider configuration fails when extraction starts so a deployment cannot silently claim
+to use the model. Once configured, transient network errors, HTTP 408/409/429/5xx responses,
+timeouts, and invalid model output are retried with bounded exponential backoff. If all attempts
+fail, the default fallback compiles that episode deterministically and writes a warning to stderr.
+Set `ENGINEERING_MEMORY_SEMANTIC_FALLBACK=none` to fail the extraction instead.
+
+Every hosted response must be raw JSON with the exact semantic contract. Runtime validation checks
+the intent and detection enums, mode-specific invariants, and that executable signals are literal
+substrings of the supplied reviewed or accepted code. Invalid or invented signals never enter the
+database. Hosted calls are concurrency-limited because extraction may analyze many episodes at once.
+
+Keep the Freesolo and database credentials on the hosted API/extraction service. VS Code and MCP
+users should connect to that service; they should not receive or manually configure service keys.
 Each episode stores the semantic snapshot and analyzer provider/version so conventions can be
 rebuilt and audited without calling the provider again.
 

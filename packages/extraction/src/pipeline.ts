@@ -11,6 +11,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractComments } from "./extract.js";
 import { DeterministicSemanticAnalyzer } from "./semantic/deterministicSemanticAnalyzer.js";
+import { createSemanticAnalyzerFromEnv } from "./semantic/createSemanticAnalyzer.js";
 import type { SemanticAnalyzer } from "./semantic/types.js";
 import type { ExtractionPublisher } from "./storage/types.js";
 import { createPrismaExtractionPublisher } from "./storage/prismaExtractionPublisher.js";
@@ -79,13 +80,19 @@ export async function runExtraction(
 /** Runs extraction with the environment-configured database publisher when available. */
 export async function runConfiguredExtraction(
   dataDirectory?: string,
-  analyzer: SemanticAnalyzer = new DeterministicSemanticAnalyzer(),
+  analyzer?: SemanticAnalyzer,
 ): Promise<ExtractionResult> {
+  const configuredAnalyzer = analyzer ?? createSemanticAnalyzerFromEnv(process.env, {
+    onFallback: (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`Freesolo semantic analysis failed; using deterministic fallback: ${message}\n`);
+    },
+  });
   const publisher = process.env.DATABASE_URL
     ? createPrismaExtractionPublisher(process.env.DATABASE_URL)
     : undefined;
   try {
-    return await runExtraction(dataDirectory, analyzer, publisher);
+    return await runExtraction(dataDirectory, configuredAnalyzer, publisher);
   } finally {
     await publisher?.close();
   }

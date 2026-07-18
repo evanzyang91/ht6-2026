@@ -138,6 +138,12 @@ provenance, storage, scope filters, and AST checks outside Freesolo. Store model
 version, input hashes, and output confidence so conventions can be rebuilt and audited. Treat review
 text as untrusted input and isolate it from tool/system instructions.
 
+Runtime selection is backend-only. `ENGINEERING_MEMORY_SEMANTIC_ANALYZER=freesolo` selects the
+OpenAI-compatible Freesolo analyzer for configured extraction; the default remains deterministic.
+Hosted responses cross a strict validation boundary before persistence, calls have bounded
+concurrency/timeouts/retries, and exhausted or invalid calls use the deterministic analyzer unless
+the operator explicitly disables fallback. End users never need the Freesolo credential.
+
 ## 24–36 hour delivery plan
 
 Ship the vertical slice already represented by this repository: ingest 50–75 merged PRs, compile
