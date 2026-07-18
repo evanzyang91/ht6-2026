@@ -1,46 +1,61 @@
-import type { RawReviewComment, ReviewEpisode } from "@ht6/shared";
-import { createHash } from "node:crypto";
+import {
+  CONVENTIONS_FILE,
+  DEFAULT_DATA_DIR,
+  EPISODES_FILE,
+  RAW_COMMENTS_FILE,
+  type RawComment,
+  type RawReviewComment,
+} from "@ht6/shared";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { linkCommentToRejectedHunk } from "./linking/linkCommentsToHunks.js";
-import { findAcceptedFix } from "./linking/findAcceptedFix.js";
-import { scoreLinkageQuality } from "./linking/linkageQuality.js";
-import { classifyIntent } from "./classify/classifyIntent.js";
-import { buildConventions } from "./conventions.js";
+import { fileURLToPath } from "node:url";
+import { extractComments } from "./extract.js";
+import { DeterministicSemanticAnalyzer } from "./semantic/deterministicSemanticAnalyzer.js";
+import type { SemanticAnalyzer } from "./semantic/types.js";
 
 export interface ExtractionResult {
   episodeCount: number;
   conventionCount: number;
+  semanticProvider: string;
+  semanticVersion: string;
+}
+
+function defaultDataDirectory(): string {
+  const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
+  return resolve(repositoryRoot, process.env.DATA_DIR ?? DEFAULT_DATA_DIR);
 }
 
 /** Rebuilds derived memory atomically from the persisted raw-review snapshot. */
-export async function runExtraction(dataDirectory = process.env.DATA_DIR ?? "data"): Promise<ExtractionResult> {
+export async function runExtraction(
+  dataDirectory = defaultDataDirectory(),
+  analyzer: SemanticAnalyzer = new DeterministicSemanticAnalyzer()
+): Promise<ExtractionResult> {
   const dataDir = resolve(dataDirectory);
-  const comments = JSON.parse(await readFile(resolve(dataDir, "raw-comments.json"), "utf8")) as RawReviewComment[];
-  const episodes: ReviewEpisode[] = comments.map((comment) => {
-    const rejectedCode = linkCommentToRejectedHunk(comment);
-    const acceptedCode = findAcceptedFix(comment);
-    return {
-      id: createHash("sha256").update(`${comment.repository}:${comment.commentId}`).digest("hex").slice(0, 16),
-      repository: comment.repository,
-      pullRequest: comment.pullRequest,
-      reviewer: comment.reviewer,
-      filePath: comment.filePath,
-      reviewComment: comment.body,
-      rejectedCode,
-      acceptedCode,
-      acceptedFixQuality: scoreLinkageQuality(rejectedCode, acceptedCode),
-      intent: classifyIntent(comment.body),
-      createdAt: comment.createdAt,
-    };
-  });
-  const conventions = buildConventions(episodes);
+  const parsed: unknown = JSON.parse(await readFile(resolve(dataDir, RAW_COMMENTS_FILE), "utf8"));
+  if (!Array.isArray(parsed)) throw new Error(`${RAW_COMMENTS_FILE} must contain a JSON array`);
+  // RAW_COMMENTS_FILE now also holds review-summary and conversation comments (RawComment
+  // union) alongside inline ones. Neither has a file/diff to anchor evidence to, so they're
+  // excluded here rather than fed through hunk-linking — a natural extension point once this
+  // pipeline is ready to derive episodes from them too. Records with no `type` at all predate
+  // the three-way split and are treated as inline, same as before.
+  const comments = (parsed as RawComment[]).filter(
+    (comment): comment is RawReviewComment =>
+      comment.type !== "review-summary" && comment.type !== "conversation"
+  );
+  const { episodes, conventions } = await extractComments(comments, analyzer);
+
   await mkdir(dataDir, { recursive: true });
-  for (const [name, value] of [["episodes.json", episodes], ["conventions.json", conventions]] as const) {
+  for (const [name, value] of [[EPISODES_FILE, episodes], [CONVENTIONS_FILE, conventions]] as const) {
     const target = resolve(dataDir, name);
     const temp = `${target}.${process.pid}.tmp`;
     await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, "utf8");
     await rename(temp, target);
   }
-  return { episodeCount: episodes.length, conventionCount: conventions.length };
+
+  return {
+    episodeCount: episodes.length,
+    conventionCount: conventions.length,
+    semanticProvider: analyzer.provider,
+    semanticVersion: analyzer.version,
+  };
 }

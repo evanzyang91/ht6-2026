@@ -21,8 +21,13 @@ Configure the repository webhook with JSON content type, the same secret, and on
 requests** event. The payload URL must be publicly reachable; for local demos, expose port 8787
 through a tunnel.
 
-After a merge, the service ingests only that PR and increments its repository's ingestion version
-in `data/pipeline-state.json`. It does not run extraction.
+After a merge, the service ingests only that PR and, if it actually added a comment that wasn't
+already stored, increments its repository's ingestion version in `data/pipeline-state.json`. It
+does not run extraction.
+
+GitHub redelivers webhooks (manual redelivery, retried failures) with the same
+`X-GitHub-Delivery` id. That id is tracked in `data/webhook-deliveries.json`; a redelivered event
+is recognized and skipped before it ever reaches the GitHub API or the comment store.
 
 The next essential MCP request runs extraction before reading memory:
 

@@ -1,40 +1,76 @@
-import type { Convention, ReviewEpisode } from "@ht6/shared";
 import { createHash } from "node:crypto";
+import type { Convention, ReviewEpisode } from "@ht6/shared";
 import { clusterEpisodes } from "./clustering/clusterConventions.js";
 import { inferScope } from "./clustering/scopeInference.js";
+import { extractCodeSignals } from "./semantic/codeSignals.js";
+import { analyzeDeterministically } from "./semantic/deterministicSemanticAnalyzer.js";
+import { semanticInputFromEpisode, type AnalyzedReviewEpisode, type SemanticAnalysis } from "./semantic/types.js";
 
-// Clusters equivalent ReviewEpisodes and produces Convention records with confidence and
-// supportingEpisodes populated. See clustering/clusterConventions.ts and
-// clustering/scopeInference.ts for the pieces this composes.
-//
-// When synthesizing Convention.rule from a cluster, use the comment text *and* the
-// rejectedCode/acceptedCode pair — don't derive the rule from comment text in isolation.
-// Self-contained comments will nearly hand you the rule verbatim; context-dependent ones
-// only generalize correctly once you look at what the code actually changed to.
-export function buildConventions(episodes: ReviewEpisode[]): Convention[] {
-  return clusterEpisodes(episodes).map((cluster) => {
-    const representative = [...cluster].sort((a, b) => b.reviewComment.length - a.reviewComment.length)[0];
-    const { pathScopes, languages } = inferScope(cluster);
-    const extractSignals = (code: string) => {
-      const imports = [...code.matchAll(/(?:from\s+|require\s*\(\s*['"])([@\w./-]+)/g)].map((match) => match[1]);
-      const calls = [...code.matchAll(/\b([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(/g)].map((match) => match[1]);
-      return [...new Set([...imports, ...calls])].slice(0, 12);
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function episodeSemantics(episode: ReviewEpisode): SemanticAnalysis {
+  const persisted = episode.semanticAnalysis;
+  if (persisted) {
+    return {
+      intent: persisted.intent,
+      title: persisted.title,
+      rule: persisted.rule,
+      rationale: persisted.rationale,
+      prohibitedSignals: persisted.prohibitedSignals,
+      preferredSignals: persisted.preferredSignals,
     };
-    const prohibitedSignals = [...new Set(cluster.flatMap((episode) => extractSignals(episode.rejectedCode)))];
-    const preferredSignals = [...new Set(cluster.flatMap((episode) => extractSignals(episode.acceptedCode ?? "")))];
-    const rule = representative.reviewComment.replace(/^\s*(nit|suggestion|question)\s*:\s*/i, "").trim();
-    const title = rule.split(/[.!?\n]/)[0].slice(0, 80) || `${representative.intent} convention`;
+  }
+  return analyzeDeterministically(semanticInputFromEpisode(episode));
+}
+
+function compileConventions(
+  episodes: ReviewEpisode[],
+  semantics: ReadonlyMap<string, SemanticAnalysis>
+): Convention[] {
+  return clusterEpisodes(episodes, semantics).map((cluster) => {
+    const representative = [...cluster].sort((left, right) => {
+      const leftRule = semantics.get(left.id)?.rule ?? left.reviewComment;
+      const rightRule = semantics.get(right.id)?.rule ?? right.reviewComment;
+      return rightRule.length - leftRule.length;
+    })[0];
+    const representativeSemantics = semantics.get(representative.id) ?? episodeSemantics(representative);
+    const { pathScopes, languages } = inferScope(cluster);
+    const prohibitedSignals = unique(cluster.flatMap(
+      (episode) => [
+        ...(semantics.get(episode.id)?.prohibitedSignals ?? []),
+        ...extractCodeSignals(episode.rejectedCode),
+      ]
+    ));
+    const preferredSignals = unique(cluster.flatMap(
+      (episode) => [
+        ...(semantics.get(episode.id)?.preferredSignals ?? []),
+        ...extractCodeSignals(episode.acceptedCode ?? ""),
+      ]
+    ));
     const distinctPrs = new Set(cluster.map((episode) => episode.pullRequest)).size;
-    const linkage = cluster.reduce((sum, episode) => sum + ({ high: 1, medium: 0.6, unknown: 0.2 }[episode.acceptedFixQuality]), 0) / cluster.length;
-    const confidence = Math.min(0.98, 0.35 + Math.log2(distinctPrs + 1) * 0.16 + linkage * 0.25);
-    const id = createHash("sha256").update(`${representative.repository}:${representative.intent}:${title.toLowerCase()}`).digest("hex").slice(0, 16);
+    const acceptedCount = cluster.filter((episode) => episode.acceptedCode).length;
+    const linkage = cluster.reduce(
+      (sum, episode) => sum + ({ high: 1, medium: 0.6, unknown: 0.2 }[episode.acceptedFixQuality]),
+      0
+    ) / cluster.length;
+    const confidence = Math.min(
+      0.98,
+      0.35 + Math.log2(distinctPrs + 1) * 0.16 + linkage * 0.25
+    );
+    const id = createHash("sha256")
+      .update(`${representative.repository}:${representative.intent}:${representativeSemantics.rule.toLowerCase()}`)
+      .digest("hex")
+      .slice(0, 16);
+
     return {
       id,
       repository: representative.repository,
-      title,
-      rule,
-      rationale: `Observed in ${distinctPrs} pull request${distinctPrs === 1 ? "" : "s"}; ${cluster.filter((e) => e.acceptedCode).length} include an accepted replacement.`,
-      category: representative.intent,
+      title: representativeSemantics.title,
+      rule: representativeSemantics.rule,
+      rationale: `${representativeSemantics.rationale} Observed in ${distinctPrs} pull request${distinctPrs === 1 ? "" : "s"}; ${acceptedCount} include an accepted replacement.`,
+      category: representativeSemantics.intent,
       pathScopes,
       languages,
       prohibitedSignals,
@@ -51,5 +87,26 @@ export function buildConventions(episodes: ReviewEpisode[]): Convention[] {
         acceptedCode: episode.acceptedCode,
       })),
     };
-  }).sort((a, b) => b.confidence - a.confidence);
+  }).sort((left, right) => right.confidence - left.confidence);
+}
+
+/** Backward-compatible deterministic convention compiler. */
+export function buildConventions(episodes: ReviewEpisode[]): Convention[] {
+  const semantics = new Map(
+    episodes.map((episode) => [
+      episode.id,
+      episodeSemantics(episode),
+    ])
+  );
+  return compileConventions(episodes, semantics);
+}
+
+/** Analyzer-aware compiler used by the extraction pipeline. */
+export function buildConventionsFromAnalyzedEpisodes(
+  analyzed: AnalyzedReviewEpisode[]
+): Convention[] {
+  return compileConventions(
+    analyzed.map(({ episode }) => episode),
+    new Map(analyzed.map(({ episode, semantics }) => [episode.id, semantics]))
+  );
 }

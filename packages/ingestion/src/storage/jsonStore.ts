@@ -1,4 +1,4 @@
-import type { RawReviewComment } from "@ht6/shared";
+import type { RawComment } from "@ht6/shared";
 import type { Store } from "./index.js";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -7,9 +7,9 @@ import { dirname, resolve } from "node:path";
 export class JsonStore implements Store {
   constructor(private readonly filePath = resolve(process.env.DATA_DIR ?? "data", "raw-comments.json")) {}
 
-  async load(repository: string): Promise<RawReviewComment[]> {
+  async load(repository: string): Promise<RawComment[]> {
     try {
-      const all = JSON.parse(await readFile(this.filePath, "utf8")) as RawReviewComment[];
+      const all = JSON.parse(await readFile(this.filePath, "utf8")) as RawComment[];
       return all.filter((comment) => comment.repository === repository);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
@@ -17,9 +17,9 @@ export class JsonStore implements Store {
     }
   }
 
-  async save(repository: string, comments: RawReviewComment[]): Promise<void> {
-    let all: RawReviewComment[] = [];
-    try { all = JSON.parse(await readFile(this.filePath, "utf8")) as RawReviewComment[]; }
+  async save(repository: string, comments: RawComment[]): Promise<void> {
+    let all: RawComment[] = [];
+    try { all = JSON.parse(await readFile(this.filePath, "utf8")) as RawComment[]; }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     const otherRepos = all.filter((comment) => comment.repository !== repository);
     const unique = new Map(comments.map((comment) => [comment.commentId, comment]));

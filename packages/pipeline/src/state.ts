@@ -32,12 +32,23 @@ async function savePipelineState(state: PipelineState, dataDirectory?: string): 
   await rename(temp, target);
 }
 
-export async function markRepositoryIngested(repository: string, pullRequest: number, dataDirectory?: string): Promise<void> {
+// `changed` defaults to true (preserves prior behavior for existing callers). Pass
+// `{ changed: false }` when a merged PR was confirmed and processed but contributed no data
+// that wasn't already stored (e.g. zero review comments, or a duplicate/no-op run) — bookkeeping
+// (lastMergedPullRequest/lastIngestedAt) still updates, but ingestionVersion does not, so a
+// no-op ingestion never triggers a downstream re-extraction.
+export async function markRepositoryIngested(
+  repository: string,
+  pullRequest: number,
+  dataDirectory?: string,
+  options?: { changed?: boolean },
+): Promise<void> {
+  const changed = options?.changed ?? true;
   const state = await loadPipelineState(dataDirectory);
   const current = state[repository] ?? { ingestionVersion: 0, extractionVersion: 0 };
   state[repository] = {
     ...current,
-    ingestionVersion: current.ingestionVersion + 1,
+    ingestionVersion: changed ? current.ingestionVersion + 1 : current.ingestionVersion,
     lastIngestedAt: new Date().toISOString(),
     lastMergedPullRequest: pullRequest,
   };
