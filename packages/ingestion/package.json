@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@ht6/shared": "*",
+    "@octokit/plugin-retry": "^7.1.1",
     "@octokit/rest": "^21.0.0"
   }
 }
