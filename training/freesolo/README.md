@@ -45,8 +45,8 @@ wc -l training/freesolo/environment/dataset/*.jsonl
 head -n 1 training/freesolo/environment/dataset/train.jsonl
 ```
 
-Expected sizes are 45 training rows and 16 held-out evaluation rows. Training is balanced across
-15 forbidden-signal, 15 missing-required-signal, and 15 semantic targets. Each JSONL object contains an
+Expected sizes are 900 training rows and 25 held-out evaluation rows. Training is balanced across
+300 forbidden-signal, 300 missing-required-signal, and 300 semantic targets. Each JSONL object contains an
 `input` string and an `output` string. Both strings contain JSON so the trained model learns a strict
 machine-readable response.
 
@@ -96,6 +96,23 @@ flash chat "$TRAINED_RUN_ID" \
 ```
 
 ## Configure extraction to use Freesolo
+
+### Current evaluated adapter
+
+The current recommended adapter is:
+
+```dotenv
+FREESOLO_BASE_URL=https://clado-ai--freesolo-lora-serving.modal.run/v1
+FREESOLO_MODEL=flash-1784428271-25c1d6d6
+```
+
+It is a `Qwen/Qwen3.6-35B-A3B` SFT adapter trained on 360 unique balanced examples (120
+forbidden-signal, 120 missing-required-signal, and 120 semantic) with seed 1337. It passed all 25
+held-out schema, grounding, and behavioral-replay checks with 17 non-blocking canonical-difference
+warnings. The previous production 9B adapter also passed but produced 21 warnings. Four controlled
+candidates (two 9B seeds and two 35B seeds) were compared before promotion; the other 35B seed
+produced one unsafe mode error, demonstrating why evaluation—not model size—selects production.
+Adapter IDs are not secrets, but any serving credential must remain in backend configuration.
 
 For the extraction CLI, copy the package template and keep it uncommitted:
 

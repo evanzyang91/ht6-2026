@@ -215,4 +215,24 @@ describe("engineering-memory extraction", () => {
     expect(convention.preferredSignals).toEqual(["isLoading"]);
     expect(convention.detection?.mode).toBe("semantic");
   });
+
+  it("scores confidence from evidence dimensions instead of one repeated default", () => {
+    const semantic = episode("semantic-confidence", 501, "Use clearer names", "const x = value", "const total = value");
+    semantic.acceptedFixQuality = "medium";
+    semantic.semanticAnalysis.detection = {
+      mode: "semantic", semanticDescription: "A name is unclear.", triggerSignals: [],
+      forbiddenSignals: [], requiredSignals: [], matchScope: "line",
+    };
+    const executable = episode("executable-confidence", 502, "Do not log tokens", "logger.info(token)", "logger.info(userId)");
+    executable.acceptedFixQuality = "medium";
+    executable.semanticAnalysis.detection = {
+      mode: "forbidden-signal", semanticDescription: "A token is logged.", triggerSignals: ["logger.info"],
+      forbiddenSignals: ["token"], requiredSignals: [], matchScope: "line",
+    };
+
+    const semanticConfidence = buildConventions([semantic])[0].confidence;
+    const executableConfidence = buildConventions([executable])[0].confidence;
+    expect(semanticConfidence).not.toBe(0.66);
+    expect(executableConfidence).toBeGreaterThan(semanticConfidence);
+  });
 });

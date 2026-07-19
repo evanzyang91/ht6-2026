@@ -83,4 +83,15 @@ export class EngineeringMemoryGraphqlClient {
     `, { repository, limit });
     return data.requestRepositorySync;
   }
+
+  async refresh(repository: string, limit: number): Promise<{ repository: string; commentCount: number }> {
+    const data = await this.request<{ requestRepositoryRefresh: { repository: string; commentCount: number } }>(`
+      mutation RequestRepositoryRefresh($repository: String!, $limit: Int) {
+        requestRepositoryRefresh(repository: $repository, limit: $limit) {
+          repository commentCount
+        }
+      }
+    `, { repository, limit });
+    return data.requestRepositoryRefresh;
+  }
 }

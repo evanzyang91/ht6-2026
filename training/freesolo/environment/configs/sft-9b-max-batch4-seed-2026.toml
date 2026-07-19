@@ -1,0 +1,13 @@
+model = "Qwen/Qwen3.5-9B"
+algorithm = "sft"
+seed = 2026
+
+[environment]
+id = "integity1/engineering-memory-sft"
+
+[train]
+epochs = 4
+max_examples = 900
+batch_size = 4
+max_context_tokens = 2048
+lora_rank = 32

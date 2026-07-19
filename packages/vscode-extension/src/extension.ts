@@ -10,6 +10,8 @@ import { applySafeguards, diagnoseSafeguards, type SafeguardSettings } from "./s
 import { diffForFile, repositoryForWorkspace, stagedDiff } from "./git.js";
 import { shouldShowPopup, type PopupRecord } from "./popupPolicy.js";
 import { EngineeringMemoryGraphqlClient } from "./graphqlClient.js";
+import type { SidebarSnapshot } from "./sidebarView.js";
+import { EngineeringMemorySidebarProvider } from "./sidebarViewProvider.js";
 
 const SOURCE = "Engineering Memory";
 
@@ -61,13 +63,17 @@ async function initializeMemory(
 // Unlike initializeMemory, this does not run extraction — it only ingests newly merged PRs and
 // leaves compiling that into conventions for the next read (loadMemory/validateMemory), which
 // runs ensureMemoryFresh lazily. Used by the background auto-ingest poll, which should never
-// force a full extraction pass just because its timer fired.
+// force a full extraction pass just because its timer fired. Mirrors the apiUrl branch the other
+// three helpers already have, so this also lands in the hosted API's store (not just the local
+// JSON fallback) when engineeringMemory.apiUrl is configured.
 async function refreshMemory(
   repository: string,
   token: string,
   dataDirectory: string,
   limit: number,
+  apiUrl: string,
 ): Promise<{ commentCount: number }> {
+  if (apiUrl) return new EngineeringMemoryGraphqlClient(apiUrl, token).refresh(repository, limit);
   const { refreshRepositoryMemory } = await import("@ht6/mcp-server/api");
   return refreshRepositoryMemory(repository, { token, dataDirectory, limit });
 }
@@ -95,6 +101,10 @@ class MemoryController implements vscode.Disposable {
   private commitWatchers: vscode.Disposable[] = [];
   private autoIngestTimer: NodeJS.Timeout | undefined;
   private autoIngestRunning = false;
+  private lastSyncAt: number | undefined;
+  private lastSyncCommentCount: number | undefined;
+  private readonly statusEmitter = new vscode.EventEmitter<void>();
+  readonly onDidChangeStatus = this.statusEmitter.event;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.status.command = "engineeringMemory.validateStagedChanges";
@@ -107,6 +117,7 @@ class MemoryController implements vscode.Disposable {
       this.diagnostics,
       this.output,
       this.status,
+      this.statusEmitter,
       vscode.workspace.onDidSaveTextDocument((document) => this.scheduleDocument(document)),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("engineeringMemory.dataDirectory")) this.setupCommitWatchers();
@@ -246,6 +257,8 @@ class MemoryController implements vscode.Disposable {
       this.status.text = "$(cloud-download) Memory: setup needed";
       this.status.command = "engineeringMemory.initializeRepository";
       this.output.appendLine(`[${new Date().toISOString()}] Setup detection: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.statusEmitter.fire();
     }
   }
 
@@ -296,6 +309,8 @@ class MemoryController implements vscode.Disposable {
         "View Details",
       );
       if (selected === "View Details") this.output.show(true);
+    } finally {
+      this.statusEmitter.fire();
     }
   }
 
@@ -329,16 +344,89 @@ class MemoryController implements vscode.Disposable {
         silent: true,
       });
       if (!session) return;
-      const limit = this.configuration().get("historyLimit", 75);
-      const result = await refreshMemory(context.repository, session.accessToken, context.dataDirectory, limit);
-      this.output.appendLine(
-        `[${new Date().toISOString()}] Auto-refresh: ${context.repository} now has ${result.commentCount} stored comments.`
-      );
+      await this.runRefresh(context, session);
     } catch (error) {
       this.output.appendLine(`[${new Date().toISOString()}] Auto-refresh: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       this.autoIngestRunning = false;
+      this.statusEmitter.fire();
     }
+  }
+
+  /** Explicit "Sync Now" action for the sidebar — unlike the silent timer, this may prompt a GitHub sign-in. */
+  async syncNow(): Promise<void> {
+    const folder = this.commandFolder();
+    if (!folder || !vscode.workspace.isTrusted) {
+      await vscode.window.showInformationMessage("Open and trust a Git repository before syncing Engineering Memory.");
+      return;
+    }
+    try {
+      const context = await this.contextForFolder(folder);
+      const session = await vscode.authentication.getSession("github", ["repo"], {
+        createIfNone: { detail: `Engineering Memory needs read access to review history for ${context.repository}.` },
+      });
+      await this.runRefresh(context, session);
+    } catch (error) {
+      this.reportError(error);
+    } finally {
+      this.statusEmitter.fire();
+    }
+  }
+
+  private async runRefresh(context: WorkspaceContext, session: vscode.AuthenticationSession): Promise<void> {
+    const limit = this.configuration().get("historyLimit", 75);
+    const result = await refreshMemory(context.repository, session.accessToken, context.dataDirectory, limit, context.apiUrl);
+    this.lastSyncAt = Date.now();
+    this.lastSyncCommentCount = result.commentCount;
+    this.output.appendLine(
+      `[${new Date().toISOString()}] Auto-refresh: ${context.repository} now has ${result.commentCount} stored comments.`
+    );
+  }
+
+  /** Prompts a GitHub sign-in, e.g. from the sidebar's "Sign in to GitHub" button. */
+  async signInToGitHub(): Promise<void> {
+    try {
+      await this.githubToken(true);
+    } finally {
+      this.statusEmitter.fire();
+    }
+  }
+
+  /** Read-only status snapshot for the sidebar webview — never triggers ingestion or extraction. */
+  async getSidebarSnapshot(): Promise<SidebarSnapshot> {
+    const apiUrl = this.configuration().get<string>("apiUrl", "").trim();
+    const folder = this.commandFolder();
+    const trusted = vscode.workspace.isTrusted;
+    const snapshot: SidebarSnapshot = {
+      hasFolder: Boolean(folder),
+      trusted,
+      signedIn: false,
+      apiUrl,
+      lastSyncAt: this.lastSyncAt,
+      lastSyncCommentCount: this.lastSyncCommentCount,
+    };
+    if (!folder || !trusted) return snapshot;
+    snapshot.signedIn = Boolean(await this.githubToken(false));
+    let context: WorkspaceContext | undefined;
+    try {
+      context = await this.contextForFolder(folder);
+      snapshot.repository = context.repository;
+    } catch (error) {
+      snapshot.repositoryError = error instanceof Error ? error.message : String(error);
+      return snapshot;
+    }
+    try {
+      const token = apiUrl ? await this.githubToken(false) : undefined;
+      const inspection = apiUrl && !token
+        ? { repository: context.repository, status: "unprocessed" as const, conventionCount: 0 }
+        : await inspectMemory(context.repository, context.dataDirectory, apiUrl, token);
+      snapshot.status = inspection.status;
+      snapshot.conventionCount = inspection.conventionCount;
+      snapshot.lastError = inspection.lastError;
+    } catch (error) {
+      snapshot.statusError = error instanceof Error ? error.message : String(error);
+    }
+    return snapshot;
   }
 
   private commandFolder(): vscode.WorkspaceFolder | undefined {
@@ -653,7 +741,11 @@ function countAddedLines(diff: string): number {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  new MemoryController(context);
+  const controller = new MemoryController(context);
+  const sidebarProvider = new EngineeringMemorySidebarProvider(controller);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider("engineeringMemory.sidebar", sidebarProvider),
+  );
 }
 
 export function deactivate(): void {}

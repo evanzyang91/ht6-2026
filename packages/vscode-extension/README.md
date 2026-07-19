@@ -60,6 +60,17 @@ Commands:
 - `Engineering Memory: Initialize Repository Memory` — sign into GitHub and backfill/compile the
   current repository without CLI setup.
 
+## Sidebar
+
+The Engineering Memory icon in the Activity Bar opens a status panel that surfaces states that
+otherwise only show up as a one-line status-bar string or buried Output-channel text: whether the
+workspace is trusted, whether you're signed in to GitHub, the inferred repository, whether you're
+talking to the hosted API or the local JSON fallback, and the compiled memory status. Each row that
+needs an action gets a button next to it — **Trust Workspace…**, **Sign in to GitHub…**,
+**Initialize Repository Memory** (becomes **Retry Setup** after a failed attempt), **Sync Now**
+(ingest newly merged PRs immediately instead of waiting for the timer), **Show Current Memory**,
+and **Open Output Log**. It updates itself whenever these things change — no manual refresh needed.
+
 ## Staying current automatically
 
 After the first **Initialize Repository Memory**, the extension silently checks the current
@@ -73,7 +84,10 @@ memory, so a check where nothing has merged since the last one costs a single PR
 not a re-scrape of history. This step deliberately does **not** compile conventions immediately;
 that still happens lazily, the next time memory is actually read (a file save, "Show Current
 Memory," etc.) — same lazy-extraction design the GitHub webhook path uses for teams running a
-shared server instead of (or alongside) this extension.
+shared server instead of (or alongside) this extension. When `engineeringMemory.apiUrl` is set
+(the default), this timer's ingest goes through the same hosted GraphQL API as everything else
+(`requestRepositoryRefresh`), so it lands in the same store "Show Current Memory" and the dashboard
+read from — not a separate local file.
 
 ## Popup behavior and limitations
 

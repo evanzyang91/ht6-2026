@@ -23,6 +23,27 @@ function includesSignal(code, signal) {
   return String(code ?? "").toLowerCase().includes(String(signal).trim().toLowerCase());
 }
 
+function normalizedWords(value) {
+  const ignored = new Set(["a", "an", "and", "are", "be", "can", "could", "here", "in", "is", "it", "of", "on", "or", "please", "should", "that", "the", "this", "to", "we", "would"]);
+  return new Set(String(value).toLowerCase().replace(/[`'"?!.:,;()/_-]/g, " ").split(/\s+/)
+    .filter((word) => word.length > 2 && !ignored.has(word)));
+}
+
+function expectedRuleCoverage(actual, expected) {
+  const actualWords = normalizedWords(actual);
+  const expectedWords = normalizedWords(expected);
+  if (!expectedWords.size) return 1;
+  return [...expectedWords].filter((word) => actualWords.has(word)).length / expectedWords.size;
+}
+
+function nearVerbatim(rule, comment) {
+  const left = normalizedWords(rule);
+  const right = normalizedWords(comment);
+  if (!left.size || !right.size) return false;
+  const overlap = [...left].filter((word) => right.has(word)).length;
+  return overlap / Math.min(left.size, right.size) >= 0.85;
+}
+
 function violates(detection, code) {
   const context = detection.triggerSignals.length === 0
     || detection.triggerSignals.some((signal) => includesSignal(code, signal));
@@ -72,11 +93,43 @@ for (const [index, row] of selectedRows) {
     failures.push(`row ${index}: malformed detection ${JSON.stringify(detection)}`);
     continue;
   }
-  if (actual.intent !== expected.intent) failures.push(`row ${index}: intent ${actual.intent} != ${expected.intent}`);
+  const supportedModes = new Set(["forbidden-signal", "missing-required-signal", "semantic"]);
+  if (!supportedModes.has(detection.mode)) {
+    failures.push(`row ${index}: unsupported detection mode ${JSON.stringify(detection.mode)}`);
+    continue;
+  }
+  const isRealMediumLinkageEpisode = !String(input.episode.repository ?? "").startsWith("acme/");
+  if (actual.intent !== expected.intent) {
+    const message = `row ${index}: intent ${actual.intent} != ${expected.intent}`;
+    // Medium-quality real linkage has no human-adjudicated intent label. Keep
+    // it visible without allowing a noisy historical label to reject a model.
+    (isRealMediumLinkageEpisode ? warnings : failures).push(message);
+  }
   if (detection.mode !== expected.detection.mode) {
     failures.push(`row ${index}: mode ${detection.mode} != ${expected.detection.mode}`);
   }
   const episode = input.episode;
+  if (actual.intent !== "question-nonactionable") {
+    if (nearVerbatim(actual.rule, episode.reviewComment)) {
+      failures.push(`row ${index}: rule copies reviewComment instead of deriving reusable knowledge; rule=${JSON.stringify(actual.rule)}`);
+    }
+    if (/[?]\s*$/.test(actual.rule)) failures.push(`row ${index}: actionable rule ends as a question`);
+    if (/\b(the reviewer|this comment|this pr)\b/i.test(actual.rule)) failures.push(`row ${index}: rule refers to review process instead of repository knowledge`);
+  }
+  if (isRealMediumLinkageEpisode) {
+    const concepts = Array.isArray(row.evaluationConcepts) ? row.evaluationConcepts : [];
+    const knowledge = `${actual.title} ${actual.rule} ${actual.rationale}`.toLowerCase();
+    const missingConcepts = concepts.filter((group) => !String(group).toLowerCase().split("|")
+      .some((alternative) => knowledge.includes(alternative)));
+    if (missingConcepts.length) {
+      failures.push(`row ${index}: rule misses curated concepts ${JSON.stringify(missingConcepts)}; rule=${JSON.stringify(actual.rule)}`);
+    } else if (!concepts.length) {
+      const coverage = expectedRuleCoverage(actual.rule, expected.rule);
+      if (coverage < 0.3) {
+        failures.push(`row ${index}: rule misses curated contextual meaning (${coverage.toFixed(2)} coverage); rule=${JSON.stringify(actual.rule)}`);
+      }
+    }
+  }
   const reviewedEvidence = `${episode.rejectedCode ?? ""}\n${episode.codeContext?.reviewedContext ?? ""}`;
   const acceptedEvidence = `${episode.acceptedCode ?? ""}\n${episode.codeContext?.acceptedContext ?? ""}`;
   for (const signal of [...detection.triggerSignals, ...detection.forbiddenSignals]) {

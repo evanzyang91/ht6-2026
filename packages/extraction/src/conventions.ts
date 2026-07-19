@@ -100,9 +100,19 @@ function compileConventions(
       (sum, episode) => sum + ({ high: 1, medium: 0.6, unknown: 0.2 }[episode.acceptedFixQuality]),
       0
     ) / cluster.length;
+    const acceptedCoverage = acceptedCount / cluster.length;
+    const executableCoverage = cluster.filter((episode) => {
+      const mode = semantics.get(episode.id)?.detection?.mode;
+      return mode === "forbidden-signal" || mode === "missing-required-signal";
+    }).length / cluster.length;
+    const supportStrength = Math.min(1, Math.log2(distinctPrs + 1) / 3);
     const confidence = Math.min(
       0.98,
-      0.35 + Math.log2(distinctPrs + 1) * 0.16 + linkage * 0.25
+      0.18
+        + supportStrength * 0.32
+        + linkage * 0.23
+        + acceptedCoverage * 0.15
+        + executableCoverage * 0.12
     );
     const id = createHash("sha256")
       .update(`${representative.repository}:${representative.intent}:${representativeSemantics.rule.toLowerCase()}`)
