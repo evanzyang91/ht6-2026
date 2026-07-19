@@ -90,6 +90,17 @@ describe("semantic response validation", () => {
       detection: { mode: "semantic" },
     });
   });
+
+  it("downgrades an intent value mistakenly returned as detection.mode", () => {
+    const confused = structuredClone(validAnalysis);
+    confused.detection.mode = "architecture";
+    expect(parseSemanticAnalysis(JSON.stringify(confused), input)).toMatchObject({
+      intent: "architecture",
+      prohibitedSignals: [],
+      preferredSignals: [],
+      detection: { mode: "semantic" },
+    });
+  });
 });
 
 describe("FreesoloSemanticAnalyzer", () => {
@@ -151,6 +162,19 @@ describe("FreesoloSemanticAnalyzer", () => {
     });
     await expect(unauthorized.analyze(input)).rejects.toThrow("HTTP 401");
     expect(unauthorizedFetch).toHaveBeenCalledOnce();
+  });
+
+  it("does not retry malformed model output and reports the actual attempt count", async () => {
+    const malformedFetch = vi.fn(async () => completion("not json"));
+    const analyzer = new FreesoloSemanticAnalyzer({
+      baseUrl: "https://example.test/v1",
+      model: "adapter",
+      fetch: malformedFetch as typeof fetch,
+      maxRetries: 2,
+      retryDelayMs: 0,
+    });
+    await expect(analyzer.analyze(input)).rejects.toThrow("after 1 attempt(s)");
+    expect(malformedFetch).toHaveBeenCalledOnce();
   });
 
   it("aborts a request at the configured timeout", async () => {

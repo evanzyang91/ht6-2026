@@ -81,18 +81,46 @@ function detectionViolates(detection: ConventionDetection, code: string): boolea
 function parseDetection(value: unknown): ConventionDetection {
   if (!isRecord(value)) throw new SemanticAnalysisValidationError("detection must be an object");
   assertExactKeys(value, DETECTION_KEYS, "detection");
-  const mode = requiredString(value.mode, "detection.mode");
-  if (!MODES.has(mode)) throw new SemanticAnalysisValidationError(`unsupported detection.mode ${JSON.stringify(mode)}`);
+  const semanticDescription = requiredString(value.semanticDescription, "detection.semanticDescription");
   const matchScope = requiredString(value.matchScope, "detection.matchScope");
   if (matchScope !== "line" && matchScope !== "file") {
     throw new SemanticAnalysisValidationError("detection.matchScope must be line or file");
   }
+  const mode = requiredString(value.mode, "detection.mode");
+  if (!MODES.has(mode)) {
+    return {
+      mode: "semantic",
+      semanticDescription,
+      triggerSignals: [],
+      forbiddenSignals: [],
+      requiredSignals: [],
+      matchScope,
+    };
+  }
+  let triggerSignals: string[];
+  let forbiddenSignals: string[];
+  let requiredSignals: string[];
+  try {
+    triggerSignals = stringArray(value.triggerSignals, "detection.triggerSignals");
+    forbiddenSignals = stringArray(value.forbiddenSignals, "detection.forbiddenSignals");
+    requiredSignals = stringArray(value.requiredSignals, "detection.requiredSignals");
+  } catch (error) {
+    if (!(error instanceof SemanticAnalysisValidationError)) throw error;
+    return {
+      mode: "semantic",
+      semanticDescription,
+      triggerSignals: [],
+      forbiddenSignals: [],
+      requiredSignals: [],
+      matchScope,
+    };
+  }
   return {
     mode: mode as ConventionDetection["mode"],
-    semanticDescription: requiredString(value.semanticDescription, "detection.semanticDescription"),
-    triggerSignals: stringArray(value.triggerSignals, "detection.triggerSignals"),
-    forbiddenSignals: stringArray(value.forbiddenSignals, "detection.forbiddenSignals"),
-    requiredSignals: stringArray(value.requiredSignals, "detection.requiredSignals"),
+    semanticDescription,
+    triggerSignals,
+    forbiddenSignals,
+    requiredSignals,
     matchScope,
   };
 }
