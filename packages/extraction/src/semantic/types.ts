@@ -4,9 +4,11 @@ import type { CommentIntent, ConventionDetection, ReviewCodeContext, ReviewEpiso
 export interface SemanticInput {
   repository: string;
   pullRequest: number;
-  filePath: string;
+  /** Absent for PR-level comments (review-summary/conversation) — no file to anchor to. */
+  filePath?: string;
   reviewComment: string;
-  rejectedCode: string;
+  /** Absent for PR-level comments — there's no diff hunk to link a rejected code snippet from. */
+  rejectedCode?: string;
   acceptedCode?: string;
   codeContext?: ReviewCodeContext;
 }

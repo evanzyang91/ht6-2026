@@ -1,4 +1,4 @@
-import type { RawReviewComment } from "@ht6/shared";
+import type { RawComment } from "@ht6/shared";
 import { createHash } from "node:crypto";
 
 function stableJson(value: unknown): string {
@@ -13,7 +13,7 @@ function stableJson(value: unknown): string {
 }
 
 /** Hashes a repository snapshot independently of comment order and object key insertion order. */
-export function inputDigest(comments: RawReviewComment[]): string {
+export function inputDigest(comments: RawComment[]): string {
   const canonical = [...comments].sort((left, right) =>
     left.repository.localeCompare(right.repository)
     || left.commentId.localeCompare(right.commentId)

@@ -4,7 +4,6 @@ import {
   EPISODES_FILE,
   RAW_COMMENTS_FILE,
   type RawComment,
-  type RawReviewComment,
 } from "@ht6/shared";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -37,10 +36,10 @@ function errorChain(error: unknown): string {
   return messages.join(" <- ");
 }
 
-function episodeLabel(input: { repository: string; pullRequest: number; filePath: string; reviewComment: string }): string {
+function episodeLabel(input: { repository: string; pullRequest: number; filePath?: string; reviewComment: string }): string {
   const review = input.reviewComment.replace(/\s+/g, " ").trim();
   const summary = review.length > 120 ? `${review.slice(0, 117)}...` : review;
-  return `${input.repository}#${input.pullRequest} ${input.filePath} review=${JSON.stringify(summary)}`;
+  return `${input.repository}#${input.pullRequest} ${input.filePath ?? "(no file)"} review=${JSON.stringify(summary)}`;
 }
 
 function defaultDataDirectory(): string {
@@ -57,15 +56,12 @@ export async function runExtraction(
   const dataDir = resolve(dataDirectory);
   const parsed: unknown = JSON.parse(await readFile(resolve(dataDir, RAW_COMMENTS_FILE), "utf8"));
   if (!Array.isArray(parsed)) throw new Error(`${RAW_COMMENTS_FILE} must contain a JSON array`);
-  // RAW_COMMENTS_FILE now also holds review-summary and conversation comments (RawComment
-  // union) alongside inline ones. Neither has a file/diff to anchor evidence to, so they're
-  // excluded here rather than fed through hunk-linking — a natural extension point once this
-  // pipeline is ready to derive episodes from them too. Records with no `type` at all predate
-  // the three-way split and are treated as inline, same as before.
-  const comments = (parsed as RawComment[]).filter(
-    (comment): comment is RawReviewComment =>
-      comment.type !== "review-summary" && comment.type !== "conversation"
-  );
+  // RAW_COMMENTS_FILE holds inline, review-summary, and conversation comments (the full
+  // RawComment union). extractComments branches per comment type internally — inline comments go
+  // through hunk-linking, review-summary/conversation comments (no file/diff to anchor to) go
+  // through the PR-level path. Records with no `type` at all predate the three-way split and are
+  // treated as inline, same as before.
+  const comments = parsed as RawComment[];
   const { episodes, conventions } = await extractComments(comments, analyzer);
 
   await mkdir(dataDir, { recursive: true });

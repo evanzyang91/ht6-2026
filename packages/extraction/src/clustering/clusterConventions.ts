@@ -16,7 +16,7 @@ export function clusterEpisodes(
 ): ReviewEpisode[][] {
   const stop = new Set(["this", "that", "with", "from", "have", "should", "could", "would", "please", "here", "there", "instead"]);
   const tokens = (episode: ReviewEpisode) => new Set(
-    `${semantics.get(episode.id)?.rule ?? episode.reviewComment} ${episode.rejectedCode} ${episode.acceptedCode ?? ""}`
+    `${semantics.get(episode.id)?.rule ?? episode.reviewComment} ${episode.rejectedCode ?? ""} ${episode.acceptedCode ?? ""}`
       .toLowerCase().match(/[a-z_$][\w$]{2,}/g)
       ?.filter((word) => !stop.has(word)) ?? []
   );

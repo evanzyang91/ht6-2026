@@ -18,7 +18,7 @@ function deriveTitle(rule: string, intent: string): string {
 /** Synchronous core retained so the existing buildConventions API remains deterministic. */
 export function analyzeDeterministically(input: SemanticInput): SemanticAnalysis {
   const comment = cleanComment(input.reviewComment);
-  const prohibitedSignals = extractCodeSignals(input.rejectedCode);
+  const prohibitedSignals = extractCodeSignals(input.rejectedCode ?? "");
   const preferredSignals = extractCodeSignals(input.acceptedCode ?? "");
   const intent = classifyIntent(comment);
   const rule = synthesizeContextualRule(input);

@@ -119,12 +119,16 @@ export async function initializeRepositoryMemory(
 }
 
 /**
- * Ingests newly merged PRs for a repository without running extraction — the editor-integration
- * equivalent of the webhook path's ingestMergedPullRequest, for a background poll that shouldn't
- * force a full extraction pass on every tick. ingest() already skips PRs already represented in
- * the store, so a poll where nothing new has merged costs one PR-list request, not a re-scrape.
- * Extraction stays lazy: the next loadRepositoryMemory/validateRepositoryDiff call (via
- * ensureMemoryFresh) picks up the bumped ingestion version and compiles memory then.
+ * Ingests newly merged PRs for a repository, then compiles them into conventions if anything new
+ * landed — the editor-integration equivalent of the webhook path's ingestMergedPullRequest,
+ * immediately followed by the same on-demand extraction ensureMemoryFresh performs elsewhere.
+ * ingest() already skips PRs already represented in the store, so a sync where nothing has merged
+ * costs one PR-list request and one cheap staleness check, not a re-scrape or a wasted extraction
+ * pass. Explicitly calling ensureMemoryFresh here (rather than relying on a read path to trigger
+ * it lazily) matters specifically for the Postgres-backed store: PostgresConventionStore
+ * implements its own inspect(), so loadRepositoryMemory's `if (!store.inspect)` guard skips
+ * ensureMemoryFresh entirely for it — nothing else would ever compile newly-ingested comments
+ * into published conventions.
  */
 export async function refreshRepositoryMemory(
   repository: string,
@@ -137,6 +141,7 @@ export async function refreshRepositoryMemory(
       dataDirectory,
       limit: options.limit,
     });
+    await ensureMemoryFresh(repository, dataDirectory);
     return { repository, commentCount: comments.length };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

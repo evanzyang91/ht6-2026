@@ -5,10 +5,12 @@ import { expect, it } from "vitest";
 import { runExtraction } from "../src/pipeline.js";
 import type { ExtractionPublisher, ExtractionSnapshot } from "../src/storage/types.js";
 
-// data/raw-comments.json now holds the RawComment union (inline + review-summary +
-// conversation). Only inline (code-anchored) comments should reach hunk-linking/clustering —
-// this confirms the read boundary filters the other two out rather than feeding them through.
-it("only extracts episodes from inline comments, ignoring review-summary and conversation entries", async () => {
+// data/raw-comments.json holds the RawComment union (inline + review-summary + conversation).
+// All three now reach episode-building: inline goes through hunk-linking as before; review-summary
+// and conversation (no file/diff to anchor to) go through the PR-level path and land as episodes
+// with filePath/rejectedCode undefined, acceptedFixQuality "unknown", and a "semantic" detection
+// mode (no code to derive forbidden/required signals from).
+it("extracts episodes from inline, review-summary, and conversation comments alike", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "engineering-memory-pipeline-"));
   await writeFile(join(dataDir, "raw-comments.json"), JSON.stringify([
     {
@@ -53,12 +55,30 @@ it("only extracts episodes from inline comments, ignoring review-summary and con
     },
   };
   const result = await runExtraction(dataDir, undefined, publisher);
-  expect(result.episodeCount).toBe(1);
+  expect(result.episodeCount).toBe(3);
   expect(result.publishedRepositoryCount).toBe(1);
-  expect(published?.comments).toHaveLength(1);
-  expect(published?.episodes).toHaveLength(1);
-  expect(published?.conventions).toHaveLength(1);
+  expect(published?.comments).toHaveLength(3);
+  expect(published?.episodes).toHaveLength(3);
 
-  const episodes = JSON.parse(await readFile(join(dataDir, "episodes.json"), "utf8")) as Array<{ id: string }>;
-  expect(episodes).toHaveLength(1);
+  const episodes = JSON.parse(await readFile(join(dataDir, "episodes.json"), "utf8")) as Array<{
+    id: string;
+    reviewComment: string;
+    filePath?: string;
+    rejectedCode?: string;
+    acceptedFixQuality: string;
+    semanticAnalysis: { detection?: { mode: string } };
+  }>;
+  expect(episodes).toHaveLength(3);
+
+  const prLevelEpisodes = episodes.filter((episode) => episode.reviewComment !== "Controllers should never access Prisma directly");
+  expect(prLevelEpisodes).toHaveLength(2);
+  for (const episode of prLevelEpisodes) {
+    expect(episode.filePath).toBeUndefined();
+    expect(episode.rejectedCode).toBeUndefined();
+    expect(episode.acceptedFixQuality).toBe("unknown");
+    expect(episode.semanticAnalysis.detection?.mode).toBe("semantic");
+  }
+
+  const inlineEpisode = episodes.find((episode) => episode.reviewComment === "Controllers should never access Prisma directly");
+  expect(inlineEpisode?.filePath).toBe("src/controllers/order.ts");
 });

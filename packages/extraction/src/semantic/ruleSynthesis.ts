@@ -26,6 +26,7 @@ export function isNearVerbatimRule(rule: string, reviewComment: string): boolean
 }
 
 function scopeSubject(input: SemanticInput): string {
+  if (input.filePath === undefined) return "This pull request";
   const path = input.filePath.toLowerCase();
   if (path === "dockerfile" || path.endsWith("/dockerfile")) return "Production container builds";
   if (/(^|\/)(tests?|__tests__)(\/|$)|\.(test|spec)\./.test(path)) return "Tests";
@@ -41,7 +42,7 @@ function scopeSubject(input: SemanticInput): string {
 }
 
 function stableSignals(input: SemanticInput): { removed?: string; added?: string } {
-  const reviewed = extractCodeSignals(input.rejectedCode);
+  const reviewed = extractCodeSignals(input.rejectedCode ?? "");
   const accepted = extractCodeSignals(input.acceptedCode ?? "");
   const removed = reviewed.find((signal) => !accepted.includes(signal) && signal.length >= 4);
   const added = accepted.find((signal) => !reviewed.includes(signal) && signal.length >= 4);

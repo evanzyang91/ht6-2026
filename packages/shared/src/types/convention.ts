@@ -4,9 +4,11 @@ export interface ConventionEvidence {
   episodeId: string;
   pullRequest: number;
   reviewer: string;
-  filePath: string;
+  /** Absent for evidence derived from a PR-level comment (review-summary/conversation) with no file to anchor to. */
+  filePath?: string;
   reviewComment: string;
-  rejectedCode: string;
+  /** Absent for evidence derived from a PR-level comment — there's no diff hunk to link a rejected code snippet from. */
+  rejectedCode?: string;
   acceptedCode?: string;
 }
 

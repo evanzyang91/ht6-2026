@@ -45,7 +45,7 @@ function compileConventions(
     const legacyProhibitedSignals = unique(cluster.flatMap(
       (episode) => [
         ...(semantics.get(episode.id)?.prohibitedSignals ?? []),
-        ...extractCodeSignals(episode.rejectedCode),
+        ...extractCodeSignals(episode.rejectedCode ?? ""),
       ]
     ));
     const legacyPreferredSignals = unique(cluster.flatMap(

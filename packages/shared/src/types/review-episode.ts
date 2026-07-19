@@ -39,9 +39,11 @@ export interface ReviewEpisode {
   repository: string;
   pullRequest: number;
   reviewer: string;
-  filePath: string;
+  /** Absent for episodes built from a PR-level comment (review-summary/conversation) — no file to anchor to. */
+  filePath?: string;
   reviewComment: string;
-  rejectedCode: string;
+  /** Absent for episodes built from a PR-level comment — there's no diff hunk to link a rejected code snippet from. */
+  rejectedCode?: string;
   acceptedCode?: string;
   codeContext?: ReviewCodeContext;
   acceptedFixQuality: LinkageQuality;

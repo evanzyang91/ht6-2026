@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
-import type { RawReviewComment, ReviewEpisode } from "@ht6/shared";
+import type { RawComment, RawReviewComment, ReviewEpisode } from "@ht6/shared";
 import { buildConventionsFromAnalyzedEpisodes } from "./conventions.js";
 import { findAcceptedFix } from "./linking/findAcceptedFix.js";
 import { linkCommentToRejectedHunk } from "./linking/linkCommentsToHunks.js";
 import { scoreLinkageQuality } from "./linking/linkageQuality.js";
 import { buildReviewCodeContext } from "./context/buildReviewCodeContext.js";
+import { analyzePrLevelComment } from "./extractPrLevelComment.js";
 import { DeterministicSemanticAnalyzer } from "./semantic/deterministicSemanticAnalyzer.js";
 import type { AnalyzedReviewEpisode, SemanticAnalyzer, SemanticInput } from "./semantic/types.js";
 
@@ -13,7 +14,8 @@ export interface ExtractCommentsResult {
   conventions: ReturnType<typeof buildConventionsFromAnalyzedEpisodes>;
 }
 
-function episodeId(comment: RawReviewComment): string {
+/** Shared across all comment types (inline, review-summary, conversation) — only needs the fields common to the whole RawComment union. */
+export function episodeId(comment: { repository: string; commentId: string }): string {
   return createHash("sha256")
     .update(`${comment.repository}:${comment.commentId}`)
     .digest("hex")
@@ -74,10 +76,18 @@ export async function analyzeRawComment(
 }
 
 export async function extractComments(
-  comments: RawReviewComment[],
+  comments: RawComment[],
   analyzer: SemanticAnalyzer = new DeterministicSemanticAnalyzer()
 ): Promise<ExtractCommentsResult> {
-  const analyzed = await Promise.all(comments.map((comment) => analyzeRawComment(comment, analyzer)));
+  // Inline and PR-level (review-summary/conversation) comments go through different
+  // episode-builders, but must land in one merged array before clustering — clustering has to see
+  // every episode type together in a single pass so, e.g., an inline comment and a conversation
+  // comment describing the same rule can still cluster into one convention.
+  const analyzed = await Promise.all(comments.map((comment) =>
+    comment.type === "review-summary" || comment.type === "conversation"
+      ? analyzePrLevelComment(comment, analyzer)
+      : analyzeRawComment(comment, analyzer)
+  ));
   return {
     episodes: analyzed.map(({ episode }) => episode),
     conventions: buildConventionsFromAnalyzedEpisodes(analyzed),

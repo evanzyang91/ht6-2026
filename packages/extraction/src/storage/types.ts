@@ -1,7 +1,7 @@
-import type { Convention, RawReviewComment, ReviewEpisode } from "@ht6/shared";
+import type { Convention, RawComment, ReviewEpisode } from "@ht6/shared";
 
 export interface ExtractionSnapshot {
-  comments: RawReviewComment[];
+  comments: RawComment[];
   episodes: ReviewEpisode[];
   conventions: Convention[];
   analyzerProvider: string;

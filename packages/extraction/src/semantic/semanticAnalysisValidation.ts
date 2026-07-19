@@ -165,7 +165,7 @@ export function deriveDeterministicDetection(
   semanticDescription: string,
   matchScope: ConventionDetection["matchScope"],
 ): ConventionDetection {
-  const reviewedSignals = extractCodeSignals(input.rejectedCode);
+  const reviewedSignals = extractCodeSignals(input.rejectedCode ?? "");
   const acceptedSignals = extractCodeSignals(input.acceptedCode ?? "");
   const removedSignals = reviewedSignals.filter((signal) => !acceptedSignals.includes(signal));
   if (removedSignals.length) {
@@ -244,7 +244,7 @@ export function parseSemanticAnalysis(
     && signalsGrounded(detection.forbiddenSignals, reviewedEvidence)
     && signalsGrounded(detection.requiredSignals, acceptedEvidence);
   const behaviorallySafe = detection.mode === "semantic"
-    || (detectionViolates(detection, input.rejectedCode)
+    || (detectionViolates(detection, input.rejectedCode ?? "")
       && (!input.acceptedCode || !detectionViolates(detection, input.acceptedCode)));
 
   // Preserve useful semantic meaning while preventing malformed or invented executable signals

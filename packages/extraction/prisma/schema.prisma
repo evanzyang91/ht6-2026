@@ -79,9 +79,9 @@ model ReviewEpisode {
   episodeKey           String         @map("episode_key")
   pullRequest          Int            @map("pull_request")
   reviewer             String
-  filePath             String         @map("file_path")
+  filePath             String?        @map("file_path")
   reviewComment        String         @map("review_comment")
-  rejectedCode         String         @map("rejected_code")
+  rejectedCode         String?        @map("rejected_code")
   acceptedCode         String?        @map("accepted_code")
   acceptedFixQuality   LinkageQuality @map("accepted_fix_quality")
   intent               CommentIntent

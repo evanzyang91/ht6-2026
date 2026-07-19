@@ -80,12 +80,12 @@ never prompts a GitHub sign-in: it only uses a session VS Code already has, so a
 haven't explicitly initialized yet is left alone rather than nagging you on every tick.
 
 Only newly merged PRs are fetched — `ingest()` skips anything already represented in local
-memory, so a check where nothing has merged since the last one costs a single PR-list request,
-not a re-scrape of history. This step deliberately does **not** compile conventions immediately;
-that still happens lazily, the next time memory is actually read (a file save, "Show Current
-Memory," etc.) — same lazy-extraction design the GitHub webhook path uses for teams running a
-shared server instead of (or alongside) this extension. When `engineeringMemory.apiUrl` is set
-(the default), this timer's ingest goes through the same hosted GraphQL API as everything else
+memory, so a check where nothing has merged since the last one costs a single PR-list request.
+When new comments *do* land, this step also compiles them into conventions immediately
+(`ensureMemoryFresh`), rather than waiting for the next read — required for the Postgres-backed
+store, which has no other automatic trigger that would ever turn freshly-ingested comments into
+published conventions. When `engineeringMemory.apiUrl` is set (the default), this timer's
+ingest-and-compile goes through the same hosted GraphQL API as everything else
 (`requestRepositoryRefresh`), so it lands in the same store "Show Current Memory" and the dashboard
 read from — not a separate local file.
 

@@ -51,9 +51,9 @@ const typeDefs = /* GraphQL */ `
     episodeId: ID!
     pullRequest: Int!
     reviewer: String!
-    filePath: String!
+    filePath: String
     reviewComment: String!
-    rejectedCode: String!
+    rejectedCode: String
     acceptedCode: String
   }
 

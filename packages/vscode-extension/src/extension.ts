@@ -325,11 +325,13 @@ class MemoryController implements vscode.Disposable {
   }
 
   /**
-   * Silently checks the current repository for newly merged PRs and ingests just those — never
-   * the full initializeRepository flow, and deliberately does NOT run extraction (see
-   * refreshMemory): ingesting on a timer should not force a compile pass every tick. Whatever
-   * new data lands here gets compiled lazily the next time memory is actually read (a file save,
-   * "Show Current Memory", etc.), same as the webhook path leaves it for the next MCP call.
+   * Silently checks the current repository for newly merged PRs, ingests just those, and compiles
+   * them into conventions if anything new landed (see refreshRepositoryMemory in
+   * @ht6/mcp-server/api, which now runs ensureMemoryFresh right after ingesting — required because
+   * the Postgres-backed store has no other trigger that would ever compile freshly-ingested
+   * comments into published conventions). ingest() already skips PRs already represented in the
+   * store, and ensureMemoryFresh is a no-op when nothing changed, so a tick where nothing merged
+   * still costs only one PR-list request, not a wasted extraction pass.
    * Never prompts a GitHub login: only an already-established session is used
    * (createIfNone: false, silent: true), so a repository nobody has explicitly initialized yet
    * is silently left alone rather than nagging the user on a timer.

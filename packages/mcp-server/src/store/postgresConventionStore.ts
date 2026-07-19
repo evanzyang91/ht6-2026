@@ -113,16 +113,19 @@ export class PostgresConventionStore implements ConventionStore {
         };
         conventions.set(row.convention_key, convention);
       }
-      if (row.episode_key && row.pull_request !== null && row.reviewer && row.file_path
-        && row.review_comment !== null && row.rejected_code !== null) {
+      // file_path/rejected_code are legitimately NULL for evidence derived from a PR-level
+      // comment (review-summary/conversation) — only episode_key/pull_request/reviewer/
+      // review_comment are always present for a real evidence row (vs. the LEFT JOIN's "no
+      // evidence at all" case, which leaves every column including episode_key null).
+      if (row.episode_key && row.pull_request !== null && row.reviewer && row.review_comment !== null) {
         convention.supportingEpisodes.push(row.episode_key);
         convention.evidence.push({
           episodeId: row.episode_key,
           pullRequest: row.pull_request,
           reviewer: row.reviewer,
-          filePath: row.file_path,
+          filePath: row.file_path ?? undefined,
           reviewComment: row.review_comment,
-          rejectedCode: row.rejected_code,
+          rejectedCode: row.rejected_code ?? undefined,
           acceptedCode: row.accepted_code ?? undefined,
         });
       }
