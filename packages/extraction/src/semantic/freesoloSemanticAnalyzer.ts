@@ -98,7 +98,9 @@ export class FreesoloSemanticAnalyzer implements SemanticAnalyzer {
 
   private async analyzeWithRetries(input: SemanticInput): Promise<SemanticAnalysis> {
     let lastError: unknown;
+    let attempts = 0;
     for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
+      attempts = attempt + 1;
       try {
         return await this.request(input);
       } catch (error) {
@@ -110,7 +112,7 @@ export class FreesoloSemanticAnalyzer implements SemanticAnalyzer {
         await this.sleep(this.retryDelayMs * (2 ** attempt));
       }
     }
-    throw new Error(`Freesolo analysis failed after ${this.maxRetries + 1} attempt(s): ${errorMessage(lastError)}`, {
+    throw new Error(`Freesolo analysis failed after ${attempts} attempt(s): ${errorMessage(lastError)}`, {
       cause: lastError,
     });
   }
