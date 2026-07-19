@@ -21,12 +21,12 @@ function operations(): ApiOperations {
   };
 }
 
-it("serves repository memory through the domain schema after authorization", async () => {
+it("serves repository memory without GitHub authorization", async () => {
   const authorize = vi.fn(async () => undefined);
   const api = createGraphqlApi({ operations: operations(), authorize });
   const response = await api.fetch("http://api/graphql", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: "Bearer github-token" },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ query: `query($repository: String!) {
       repositoryMemory(repository: $repository) {
         status conventionCount conventions {
@@ -41,15 +41,17 @@ it("serves repository memory through the domain schema after authorization", asy
     status: "ready",
     conventions: [{ id: "conv-1", detection: { mode: "forbidden-signal", matchScope: "line" } }],
   });
-  expect(authorize).toHaveBeenCalledWith("acme/api", "github-token");
+  expect(authorize).not.toHaveBeenCalled();
 });
 
-it("rejects requests without a bearer token", async () => {
+it("keeps repository sync protected by a bearer token", async () => {
   const api = createGraphqlApi({ operations: operations(), authorize: async () => undefined });
   const response = await api.fetch("http://api/graphql", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ query: `{ repositoryMemory(repository: "acme/api") { status } }` }),
+    body: JSON.stringify({ query: `mutation {
+      requestRepositorySync(repository: "acme/api") { repository }
+    }` }),
   });
   const body = await response.json() as { errors: Array<{ message: string }> };
   expect(body.errors[0].message).toBe("Authentication required");

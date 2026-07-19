@@ -142,20 +142,17 @@ export function createGraphqlApi(options: {
     typeDefs,
     resolvers: {
       Query: {
-        repositoryMemory: async (_parent, { repository }, context) => {
-          await authorize(context.request, repository);
+        repositoryMemory: async (_parent, { repository }) => {
           const [inspection, memory] = await Promise.all([
             operations.inspect(repository),
             operations.memory(repository),
           ]);
           return { ...inspection, conventions: memory.conventions };
         },
-        convention: async (_parent, { repository, id }, context) => {
-          await authorize(context.request, repository);
+        convention: async (_parent, { repository, id }) => {
           return (await operations.memory(repository)).conventions.find((item) => item.id === id) ?? null;
         },
-        validateDiff: async (_parent, { repository, diff }, context) => {
-          await authorize(context.request, repository);
+        validateDiff: async (_parent, { repository, diff }) => {
           return operations.validate(repository, diff);
         },
       },

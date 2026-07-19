@@ -8,155 +8,124 @@ function formatPercent(value: number): string {
 
 export default async function DashboardPage() {
   const data = await loadDashboardData();
-  const maxCategoryCount = Math.max(...data.categories.map((item) => item.count), 1);
+  const pullRequests = new Set(data.reviewEpisodes.map((episode) => episode.pullRequest)).size;
+  const reviewers = new Set(data.reviewEpisodes.map((episode) => episode.reviewer)).size;
 
   return (
     <main className="page-shell">
       <section className="page-heading">
         <div>
-          <h1>Pull request review analytics</h1>
+          <h1>Engineering memory</h1>
           <p className="lede">
-            The conventions reviewers repeat most, how often they appear, and where accepted fixes
-            are becoming standard practice.
+            Conventions and review episodes loaded directly from the GraphQL API.
           </p>
         </div>
         <div className="heading-context">
-          <span>{data.source === "live" ? "Live memory" : "Demo data"}</span>
+          <span>{data.connection === "live" ? "Live API" : "API unavailable"}</span>
           <span>{data.repository}</span>
-          {data.viewer ? <span>@{data.viewer.login}</span> : null}
-          <span className="period-label">All merged PRs</span>
-          {data.viewer
-            ? <a className="auth-link secondary" href="/api/auth/signout">Sign out</a>
-            : <a className="auth-link" href="/api/auth/github">Sign in with GitHub</a>}
+          {data.status ? <span>{data.status}</span> : null}
         </div>
       </section>
 
-      {data.connection === "authentication-required" ? (
-        <section className="connection-banner">
-          <strong>Connect GitHub to load repository memory.</strong>
-          <span>The dashboard is showing demo data until you sign in.</span>
-        </section>
-      ) : null}
-      {data.connection === "api-error" ? (
+      {data.connection !== "live" ? (
         <section className="connection-banner error">
           <strong>Repository memory could not be loaded.</strong>
-          <span>Confirm that the API is running and this GitHub account can access {data.repository}.</span>
+          <span>{data.error}</span>
         </section>
       ) : null}
 
-      <section className="metric-grid" aria-label="Review summary">
+      <section className="metric-grid" aria-label="Repository memory summary">
         <article className="metric-card">
-          <span className="metric-label">Comments analyzed</span>
-          <strong>{data.summary.commentsAnalyzed}</strong>
-          <span className="metric-detail">Across {data.summary.pullRequests} pull requests</span>
+          <span className="metric-label">Conventions</span>
+          <strong>{data.conventions.length}</strong>
+          <span className="metric-detail">Published recurring patterns</span>
         </article>
         <article className="metric-card">
-          <span className="metric-label">Recurring conventions</span>
-          <strong>{data.summary.conventions}</strong>
-          <span className="metric-detail">Patterns with reusable evidence</span>
+          <span className="metric-label">Review episodes</span>
+          <strong>{data.reviewEpisodes.length}</strong>
+          <span className="metric-detail">Evidence returned by GraphQL</span>
         </article>
         <article className="metric-card">
-          <span className="metric-label">Accepted fix rate</span>
-          <strong>{formatPercent(data.summary.acceptedFixRate)}</strong>
-          <span className="metric-detail">Comments linked to merged fixes</span>
+          <span className="metric-label">Pull requests</span>
+          <strong>{pullRequests}</strong>
+          <span className="metric-detail">Represented in the evidence</span>
         </article>
         <article className="metric-card">
-          <span className="metric-label">Active reviewers</span>
-          <strong>{data.summary.reviewers}</strong>
-          <span className="metric-detail">Contributing repository knowledge</span>
+          <span className="metric-label">Reviewers</span>
+          <strong>{reviewers}</strong>
+          <span className="metric-detail">Contributors to repository memory</span>
         </article>
       </section>
 
-      <section className="primary-grid">
-        <article className="panel frequent-panel">
+      <section className="data-stack">
+        <article className="panel">
           <div className="panel-heading">
-            <div>
-              <h2>Most frequent PR comments</h2>
-            </div>
-            <span className="panel-note">Top 3</span>
+            <h2>Conventions</h2>
+            <span className="panel-note">{data.conventions.length} records</span>
           </div>
+          <div className="record-list">
+            {data.conventions.map((convention) => (
+              <section className="record-card" key={convention.id}>
+                <div className="record-heading">
+                  <div>
+                    <span className="category-pill">{convention.category}</span>
+                    <h3>{convention.title}</h3>
+                  </div>
+                  <strong>{formatPercent(convention.confidence)}</strong>
+                </div>
+                <p className="record-rule">{convention.rule}</p>
+                <p className="record-rationale">{convention.rationale}</p>
+                <div className="record-meta">
+                  <span>{convention.supportingEpisodes.length} supporting episodes</span>
+                  {convention.languages.length ? <span>{convention.languages.join(", ")}</span> : null}
+                  {convention.pathScopes.length ? <span>{convention.pathScopes.join(", ")}</span> : null}
+                </div>
+              </section>
+            ))}
+            {data.connection === "live" && !data.conventions.length ? (
+              <p className="empty-state">No published conventions were returned for this repository.</p>
+            ) : null}
+          </div>
+        </article>
 
-          <ol className="comment-list">
-            {data.topComments.map((comment, index) => (
-              <li key={comment.id} className="comment-row">
-                <span className="rank" aria-label={`Rank ${index + 1}`}>{String(index + 1).padStart(2, "0")}</span>
-                <div className="comment-copy">
-                  <blockquote>“{comment.comment}”</blockquote>
-                  <div className="comment-meta">
-                    <span className="category-pill">{comment.category}</span>
-                    <span>{comment.pullRequests} supporting PRs</span>
-                    <span>{formatPercent(comment.confidence)} confidence</span>
+        <article className="panel">
+          <div className="panel-heading">
+            <h2>Review episodes</h2>
+            <span className="panel-note">{data.reviewEpisodes.length} records</span>
+          </div>
+          <div className="record-list">
+            {data.reviewEpisodes.map((episode) => (
+              <section className="record-card episode-card" key={episode.id}>
+                <div className="record-heading">
+                  <div>
+                    <span className="episode-pr">PR #{episode.pullRequest}</span>
+                    <h3>{episode.filePath}</h3>
+                  </div>
+                  <strong>@{episode.reviewer}</strong>
+                </div>
+                <blockquote>“{episode.reviewComment}”</blockquote>
+                <div className="code-comparison">
+                  <div>
+                    <span>Rejected</span>
+                    <pre>{episode.rejectedCode}</pre>
+                  </div>
+                  <div>
+                    <span>Accepted</span>
+                    <pre>{episode.acceptedCode || "No accepted replacement recorded"}</pre>
                   </div>
                 </div>
-                <div className="frequency">
-                  <strong>{comment.count}</strong>
-                  <span>mentions</span>
-                </div>
-              </li>
+              </section>
             ))}
-          </ol>
-        </article>
-
-        <article className="panel category-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Review categories</h2>
-            </div>
-          </div>
-          <div className="category-list">
-            {data.categories.map((category) => (
-              <div className="category-row" key={category.name}>
-                <div className="category-label-row">
-                  <span>{category.name}</span>
-                  <span>{category.count}</span>
-                </div>
-                <div className="bar-track" aria-label={`${category.name}: ${category.count} comments`}>
-                  <span className="bar-fill" style={{ width: `${(category.count / maxCategoryCount) * 100}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </article>
-      </section>
-
-      <section className="secondary-grid">
-        <article className="panel outcome-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Accepted fix coverage</h2>
-            </div>
-            <strong className="coverage-value">{formatPercent(data.summary.acceptedFixRate)}</strong>
-          </div>
-          <div className="coverage-track" aria-label={`${formatPercent(data.summary.acceptedFixRate)} accepted fix coverage`}>
-            <span style={{ width: formatPercent(data.summary.acceptedFixRate) }} />
-          </div>
-          <div className="coverage-legend">
-            <span><i className="legend-swatch accepted" />Linked to accepted code</span>
-            <span><i className="legend-swatch unresolved" />No accepted replacement found</span>
-          </div>
-        </article>
-
-        <article className="panel reviewer-panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Reviewer activity</h2>
-            </div>
-          </div>
-          <div className="reviewer-table" role="table" aria-label="Reviewer activity">
-            {data.reviewers.map((reviewer) => (
-              <div className="reviewer-row" role="row" key={reviewer.name}>
-                <span className="avatar" aria-hidden="true">{reviewer.initials}</span>
-                <span className="reviewer-name" role="cell">{reviewer.name}</span>
-                <span className="reviewer-count" role="cell">{reviewer.comments} comments</span>
-              </div>
-            ))}
+            {data.connection === "live" && !data.reviewEpisodes.length ? (
+              <p className="empty-state">No review episodes were returned for this repository.</p>
+            ) : null}
           </div>
         </article>
       </section>
 
       <footer>
-        <span>Updated from merged pull request history</span>
-        <span>{data.source === "live" ? "Connected to Engineering Memory API" : "Demo data is currently displayed"}</span>
+        <span>{data.repository}</span>
+        <span>Read directly from Engineering Memory GraphQL</span>
       </footer>
     </main>
   );
