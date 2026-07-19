@@ -50,6 +50,13 @@ function groupByRepository<T extends { repository: string }>(records: T[]): Map<
   return grouped;
 }
 
+/** Resolves convention-key collisions deterministically with last-write-wins semantics. */
+function overwriteDuplicateConventions(conventions: SharedConvention[]): SharedConvention[] {
+  const byKey = new Map<string, SharedConvention>();
+  for (const convention of conventions) byKey.set(convention.id, convention);
+  return [...byKey.values()];
+}
+
 async function createEpisode(
   transaction: Prisma.TransactionClient,
   runId: string,
@@ -130,7 +137,7 @@ export class PrismaExtractionPublisher implements ExtractionPublisher {
         select: { id: true, activeExtractionRunId: true },
       });
       const episodes = episodesByRepository.get(slug) ?? [];
-      const conventions = conventionsByRepository.get(slug) ?? [];
+      const conventions = overwriteDuplicateConventions(conventionsByRepository.get(slug) ?? []);
       const digest = inputDigest(comments);
       const fingerprint = {
         repositoryId: repository.id,

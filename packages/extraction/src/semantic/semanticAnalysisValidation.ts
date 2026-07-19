@@ -1,4 +1,5 @@
 import type { CommentIntent, ConventionDetection } from "@ht6/shared";
+import { extractCodeSignals } from "./codeSignals.js";
 import type { SemanticAnalysis, SemanticInput } from "./types.js";
 import { isNearVerbatimRule, synthesizeContextualRule } from "./ruleSynthesis.js";
 
@@ -13,6 +14,24 @@ const INTENTS = new Set<CommentIntent>([
   "actionable-change", "architecture", "testing", "security", "style", "question-nonactionable",
 ]);
 const MODES = new Set(["forbidden-signal", "missing-required-signal", "semantic"]);
+
+export type SemanticDetectionFallbackReason =
+  | "unsupported-mode"
+  | "invalid-signal-arrays"
+  | "incoherent-detection"
+  | "ungrounded-signals"
+  | "behaviorally-unsafe"
+  | "semantic-executable-opportunity";
+
+export interface SemanticDetectionFallback {
+  reason: SemanticDetectionFallbackReason;
+  originalMode: string;
+  replacementMode: ConventionDetection["mode"];
+}
+
+export interface SemanticAnalysisValidationOptions {
+  onDetectionFallback?: (event: SemanticDetectionFallback) => void;
+}
 
 export class SemanticAnalysisValidationError extends Error {
   constructor(message: string) {
@@ -79,7 +98,11 @@ function detectionViolates(detection: ConventionDetection, code: string): boolea
   return false;
 }
 
-function parseDetection(value: unknown): ConventionDetection {
+function parseDetection(value: unknown): {
+  detection: ConventionDetection;
+  fallbackReason?: SemanticDetectionFallbackReason;
+  originalMode: string;
+} {
   if (!isRecord(value)) throw new SemanticAnalysisValidationError("detection must be an object");
   assertExactKeys(value, DETECTION_KEYS, "detection");
   const semanticDescription = requiredString(value.semanticDescription, "detection.semanticDescription");
@@ -90,12 +113,16 @@ function parseDetection(value: unknown): ConventionDetection {
   const mode = requiredString(value.mode, "detection.mode");
   if (!MODES.has(mode)) {
     return {
-      mode: "semantic",
-      semanticDescription,
-      triggerSignals: [],
-      forbiddenSignals: [],
-      requiredSignals: [],
-      matchScope,
+      originalMode: mode,
+      fallbackReason: "unsupported-mode",
+      detection: {
+        mode: "semantic",
+        semanticDescription,
+        triggerSignals: [],
+        forbiddenSignals: [],
+        requiredSignals: [],
+        matchScope,
+      },
     };
   }
   let triggerSignals: string[];
@@ -108,26 +135,76 @@ function parseDetection(value: unknown): ConventionDetection {
   } catch (error) {
     if (!(error instanceof SemanticAnalysisValidationError)) throw error;
     return {
-      mode: "semantic",
+      originalMode: mode,
+      fallbackReason: "invalid-signal-arrays",
+      detection: {
+        mode: "semantic",
+        semanticDescription,
+        triggerSignals: [],
+        forbiddenSignals: [],
+        requiredSignals: [],
+        matchScope,
+      },
+    };
+  }
+  return {
+    originalMode: mode,
+    detection: {
+      mode: mode as ConventionDetection["mode"],
+      semanticDescription,
+      triggerSignals,
+      forbiddenSignals,
+      requiredSignals,
+      matchScope,
+    },
+  };
+}
+
+export function deriveDeterministicDetection(
+  input: SemanticInput,
+  semanticDescription: string,
+  matchScope: ConventionDetection["matchScope"],
+): ConventionDetection {
+  const reviewedSignals = extractCodeSignals(input.rejectedCode);
+  const acceptedSignals = extractCodeSignals(input.acceptedCode ?? "");
+  const removedSignals = reviewedSignals.filter((signal) => !acceptedSignals.includes(signal));
+  if (removedSignals.length) {
+    return {
+      mode: "forbidden-signal",
       semanticDescription,
       triggerSignals: [],
-      forbiddenSignals: [],
+      forbiddenSignals: removedSignals,
       requiredSignals: [],
       matchScope,
     };
   }
+  const addedSignals = acceptedSignals.filter((signal) => !reviewedSignals.includes(signal));
+  if (input.acceptedCode && reviewedSignals.length && addedSignals.length) {
+    return {
+      mode: "missing-required-signal",
+      semanticDescription,
+      triggerSignals: [reviewedSignals[0]],
+      forbiddenSignals: [],
+      requiredSignals: addedSignals,
+      matchScope,
+    };
+  }
   return {
-    mode: mode as ConventionDetection["mode"],
+    mode: "semantic",
     semanticDescription,
-    triggerSignals,
-    forbiddenSignals,
-    requiredSignals,
+    triggerSignals: [],
+    forbiddenSignals: [],
+    requiredSignals: [],
     matchScope,
   };
 }
 
 /** Parses and grounds the model response before it can enter persistent engineering memory. */
-export function parseSemanticAnalysis(responseText: string, input: SemanticInput): SemanticAnalysis {
+export function parseSemanticAnalysis(
+  responseText: string,
+  input: SemanticInput,
+  options: SemanticAnalysisValidationOptions = {},
+): SemanticAnalysis {
   const text = responseText.trim();
   if (!text.startsWith("{") || !text.endsWith("}")) {
     throw new SemanticAnalysisValidationError("response must be raw JSON without Markdown or commentary");
@@ -150,7 +227,9 @@ export function parseSemanticAnalysis(responseText: string, input: SemanticInput
   if (!INTENTS.has(intent as CommentIntent)) {
     throw new SemanticAnalysisValidationError(`unsupported intent ${JSON.stringify(intent)}`);
   }
-  let detection = parseDetection(parsed.detection);
+  const parsedDetection = parseDetection(parsed.detection);
+  let detection = parsedDetection.detection;
+  let fallbackReason = parsedDetection.fallbackReason;
   const reviewedEvidence = evidenceText(input, "reviewed");
   const acceptedEvidence = evidenceText(input, "accepted");
 
@@ -170,7 +249,7 @@ export function parseSemanticAnalysis(responseText: string, input: SemanticInput
 
   // Preserve useful semantic meaning while preventing malformed or invented executable signals
   // from entering memory. Legacy top-level signal fields are deliberately ignored and derived.
-  if (!coherent || !grounded || !behaviorallySafe || intent === "question-nonactionable") {
+  if (intent === "question-nonactionable") {
     detection = {
       mode: "semantic",
       semanticDescription: detection.semanticDescription,
@@ -179,6 +258,24 @@ export function parseSemanticAnalysis(responseText: string, input: SemanticInput
       requiredSignals: [],
       matchScope: detection.matchScope,
     };
+  } else {
+    fallbackReason ??= !coherent
+      ? "incoherent-detection"
+      : !grounded
+        ? "ungrounded-signals"
+        : !behaviorallySafe ? "behaviorally-unsafe" : undefined;
+    const deterministicCandidate = fallbackReason || detection.mode === "semantic"
+      ? deriveDeterministicDetection(input, detection.semanticDescription, detection.matchScope)
+      : undefined;
+    if (deterministicCandidate && (fallbackReason || deterministicCandidate.mode !== "semantic")) {
+      fallbackReason ??= "semantic-executable-opportunity";
+      detection = deterministicCandidate;
+      options.onDetectionFallback?.({
+        reason: fallbackReason,
+        originalMode: parsedDetection.originalMode,
+        replacementMode: detection.mode,
+      });
+    }
   }
 
   const prohibitedSignals = detection.mode === "forbidden-signal" ? detection.forbiddenSignals : [];

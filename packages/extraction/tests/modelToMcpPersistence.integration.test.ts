@@ -64,11 +64,15 @@ integrationTest("preserves model detection through conventions, PostgreSQL, and 
   const { episodes, conventions } = await extractComments(comments, analyzer);
   expect(conventions).toHaveLength(1);
 
+  const overwrittenConvention = {
+    ...conventions[0],
+    title: "Authenticate order routes (last write)",
+  };
   const publisher = createPrismaExtractionPublisher(connectionString!);
   await publisher.publish({
     comments,
     episodes,
-    conventions,
+    conventions: [conventions[0], overwrittenConvention],
     analyzerProvider: analyzer.provider,
     analyzerVersion: analyzer.version,
     extractorVersion: "integration-detection-1",
@@ -80,6 +84,7 @@ integrationTest("preserves model detection through conventions, PostgreSQL, and 
     const persisted = await store.all(repository);
     expect(persisted).toHaveLength(1);
     expect(persisted[0]).toMatchObject({
+      title: "Authenticate order routes (last write)",
       preferredSignals: ["requireAuth"],
       detection: {
         mode: "missing-required-signal",

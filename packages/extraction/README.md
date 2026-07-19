@@ -54,9 +54,23 @@ Factual linking (diff hunks, accepted patches, linkage quality, and provenance) 
 the semantic processor. `SemanticAnalyzer` receives that evidence and returns normalized intent,
 rule, rationale, and prohibited/preferred code signals. The default
 `DeterministicSemanticAnalyzer` uses local heuristics and requires no model or network access.
-`FreesoloSemanticAnalyzer` calls a deployed adapter through its OpenAI-compatible `/v1` endpoint.
+`GeminiSemanticAnalyzer` calls Gemini with a native structured-output schema, while
+`FreesoloSemanticAnalyzer` remains available for post-training experiments through its
+OpenAI-compatible `/v1` endpoint.
 Configured extraction selects the provider from environment variables; direct library calls remain
 deterministic unless an analyzer is explicitly supplied.
+
+To enable Gemini on a backend:
+
+```dotenv
+ENGINEERING_MEMORY_SEMANTIC_ANALYZER=gemini
+ENGINEERING_MEMORY_SEMANTIC_FALLBACK=deterministic
+GEMINI_API_KEY=backend-only-secret
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_TIMEOUT_MS=30000
+GEMINI_MAX_RETRIES=2
+GEMINI_MAX_CONCURRENCY=4
+```
 
 To enable Freesolo on a backend after deploying an adapter:
 
@@ -82,7 +96,7 @@ the intent and detection enums, mode-specific invariants, and that executable si
 substrings of the supplied reviewed or accepted code. Invalid or invented signals never enter the
 database. Hosted calls are concurrency-limited because extraction may analyze many episodes at once.
 
-Keep the Freesolo and database credentials on the hosted API/extraction service. VS Code and MCP
+Keep Gemini, Freesolo, and database credentials on the hosted API/extraction service. VS Code and MCP
 users should connect to that service; they should not receive or manually configure service keys.
 Each episode stores the semantic snapshot and analyzer provider/version so conventions can be
 rebuilt and audited without calling the provider again.

@@ -4,7 +4,7 @@
     "repository": "chene0/ht6-dummy-repo",
     "title": "This correctly rejects malformed IDs with 400",
     "rule": "This correctly rejects malformed IDs with 400. Can the API reference distinguish that response from a well-formed but missing ID returning 404?",
-    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 9 pull requests; 21 include an accepted replacement.",
+    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 8 pull requests; 20 include an accepted replacement.",
     "category": "actionable-change",
     "pathScopes": [
       "src/**"
@@ -104,6 +104,59 @@
       "this.store.save",
       "randomUUID"
     ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "This correctly rejects malformed IDs with 400. Can the API reference distinguish that response from a well-formed but missing ID returning 404?",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "registerRequestContext",
+        "app.addHook",
+        "async",
+        "reply.header",
+        "registerErrorHandler",
+        "app.setErrorHandler",
+        "if",
+        "reply.code",
+        "send",
+        "error.message.endsWith",
+        "request.log.error",
+        "z.object",
+        "z.string",
+        "uuid",
+        "min",
+        "max",
+        "registerNoteRoutes",
+        "app.post",
+        "parameters.parse",
+        "noteInput.parse",
+        "notes.add",
+        "incidents.requireIncident",
+        "z.enum",
+        "registerIncidentDetailRoutes",
+        "app.get",
+        "service.requireIncident",
+        "app.patch",
+        "transition.parse",
+        "service.transition",
+        "trim",
+        "registerIncidentRoutes",
+        "store.list",
+        "createIncident.parse",
+        "registerHealthRoutes",
+        "Date",
+        "toISOString",
+        "buildApp",
+        "Fastify",
+        "IncidentStore",
+        "IncidentService",
+        "constructor",
+        "add",
+        "this.store.save",
+        "randomUUID"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.98,
     "supportingEpisodes": [
       "4ed31faa724df565",
@@ -125,8 +178,7 @@
       "971ed6b31e389679",
       "6f3924f10102fe0e",
       "890b6fd79123da4b",
-      "9224e304d16dc57c",
-      "062bd45e1c1e2176"
+      "9224e304d16dc57c"
     ],
     "evidence": [
       {
@@ -233,6 +285,35 @@
       "store.clear",
       "store.list"
     ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "This fixture is dense enough to hide which fields matter to the assertion. Can we extract it into a named builder with sensible defaults?",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "describe",
+        "buildApp",
+        "afterEach",
+        "async",
+        "app.close",
+        "it",
+        "app.inject",
+        "expect",
+        "toBe",
+        "response.json",
+        "toMatchObject",
+        "IncidentService",
+        "IncidentStore",
+        "service.create",
+        "toEqual",
+        "beforeEach",
+        "store.save",
+        "store.get",
+        "store.clear",
+        "store.list"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.82,
     "supportingEpisodes": [
       "1eb2da5e54f1bd52",
@@ -291,11 +372,11 @@
     ]
   },
   {
-    "id": "be44587e3721f65f",
+    "id": "142a97982a8e8003",
     "repository": "chene0/ht6-dummy-repo",
-    "title": "Could commander eventually be a stable user ID rather than a display name",
-    "rule": "Could commander eventually be a stable user ID rather than a display name? It may be useful to reflect that distinction in the field name.",
-    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 3 pull requests; 4 include an accepted replacement.",
+    "title": "Please add an assertion that transitioning an unknown ID throws the expected dom",
+    "rule": "Please add an assertion that transitioning an unknown ID throws the expected domain error once that error type lands.",
+    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 2 pull requests; 2 include an accepted replacement.",
     "category": "actionable-change",
     "pathScopes": [
       "**"
@@ -339,12 +420,35 @@
       "transition",
       "this.requireIncident"
     ],
-    "confidence": 0.82,
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "Please add an assertion that transitioning an unknown ID throws the expected domain error once that error type lands.",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "describe",
+        "it",
+        "IncidentService",
+        "IncidentStore",
+        "service.create",
+        "expect",
+        "toBe",
+        "toEqual",
+        "service.transition",
+        "constructor",
+        "create",
+        "Date",
+        "toISOString",
+        "this.store.save",
+        "randomUUID",
+        "transition"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
+    "confidence": 0.754,
     "supportingEpisodes": [
       "7dd550e8aecf1ef9",
-      "dfa17b67ccd82a8b",
-      "7cee62f2da3eed5c",
-      "bada36b140606409"
+      "dfa17b67ccd82a8b"
     ],
     "evidence": [
       {
@@ -364,24 +468,6 @@
         "reviewComment": "Should we reject transitions out of `resolved`, or is reopening an incident an intentional part of the lifecycle?",
         "rejectedCode": "import { randomUUID } from \"node:crypto\";\nimport type { Incident, IncidentSeverity, IncidentStatus } from \"../domain/incident.js\";\nimport { IncidentStore } from \"../store/incident-store.js\";\n\nexport class IncidentService {\n  constructor(private readonly store: IncidentStore) {}\n\n  create(title: string, severity: IncidentSeverity): Incident {\n    const now = new Date().toISOString();\n    return this.store.save({\n      id: randomUUID(), title, severity, status: \"investigating\",\n      createdAt: now, updatedAt: now, notes: []\n    });\n  }\n\n  transition(id: string, status: IncidentStatus): Incident {",
         "acceptedCode": "import { randomUUID } from \"node:crypto\";\nimport type { Incident, IncidentSeverity, IncidentStatus } from \"../domain/incident.js\";\nimport { IncidentStore } from \"../store/incident-store.js\";\nexport class IncidentService {\n  constructor(private readonly store: IncidentStore) {}\n  create(title: string, severity: IncidentSeverity): Incident {\n    const now = new Date().toISOString();\n    return this.store.save({\n      id: randomUUID(), title, severity, status: \"investigating\",\n      createdAt: now, updatedAt: now, notes: []\n  transition(id: string, status: IncidentStatus): Incident {\n    const incident = this.requireIncident(id);"
-      },
-      {
-        "episodeId": "7cee62f2da3eed5c",
-        "pullRequest": 5,
-        "reviewer": "chene0",
-        "filePath": "src/domain/incident.ts",
-        "reviewComment": "Could commander eventually be a stable user ID rather than a display name? It may be useful to reflect that distinction in the field name.",
-        "rejectedCode": "export type IncidentSeverity = \"sev1\" | \"sev2\" | \"sev3\";\nexport type IncidentStatus = \"investigating\" | \"mitigating\" | \"resolved\";\n\nexport interface ResponderNote {\n  id: string;\n  author: string;\n  message: string;\n  createdAt: string;\n}\n\nexport interface Incident {\n  id: string;\n  title: string;\n  severity: IncidentSeverity;\n  status: IncidentStatus;\n  commander?: string;",
-        "acceptedCode": "export type IncidentSeverity = \"sev1\" | \"sev2\" | \"sev3\";\nexport type IncidentStatus = \"investigating\" | \"mitigating\" | \"resolved\";\nexport interface ResponderNote {\n  id: string;\n  author: string;\n  message: string;\n  createdAt: string;\nexport interface Incident {\n  id: string;\n  title: string;\n  severity: IncidentSeverity;\n  status: IncidentStatus;"
-      },
-      {
-        "episodeId": "bada36b140606409",
-        "pullRequest": 5,
-        "reviewer": "chene0",
-        "filePath": "src/domain/incident.ts",
-        "reviewComment": "Are notes guaranteed to remain insertion-ordered, or should the contract require consumers to sort by `createdAt`?",
-        "rejectedCode": "export type IncidentSeverity = \"sev1\" | \"sev2\" | \"sev3\";\nexport type IncidentStatus = \"investigating\" | \"mitigating\" | \"resolved\";\n\nexport interface ResponderNote {\n  id: string;\n  author: string;\n  message: string;\n  createdAt: string;\n}\n\nexport interface Incident {\n  id: string;\n  title: string;\n  severity: IncidentSeverity;\n  status: IncidentStatus;\n  commander?: string;\n  createdAt: string;\n  updatedAt: string;\n  notes: ResponderNote[];",
-        "acceptedCode": "export type IncidentSeverity = \"sev1\" | \"sev2\" | \"sev3\";\nexport type IncidentStatus = \"investigating\" | \"mitigating\" | \"resolved\";\nexport interface ResponderNote {\n  id: string;\n  author: string;\n  message: string;\n  createdAt: string;\nexport interface Incident {\n  id: string;\n  title: string;\n  severity: IncidentSeverity;\n  status: IncidentStatus;"
       }
     ]
   },
@@ -390,10 +476,10 @@
     "repository": "chene0/ht6-dummy-repo",
     "title": "Could ID generation be injected",
     "rule": "Could ID generation be injected? Deterministic IDs would make service tests more focused and remove assertions against unpredictable values.",
-    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 3 pull requests; 4 include an accepted replacement.",
+    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 2 pull requests; 3 include an accepted replacement.",
     "category": "architecture",
     "pathScopes": [
-      "src/**"
+      "src/services/**"
     ],
     "languages": [
       "typescript"
@@ -422,23 +508,35 @@
       "Date",
       "toISOString",
       "transition",
-      "this.requireIncident",
-      "list",
-      "this.incidents.values",
-      "sort",
-      "b.createdAt.localeCompare",
-      "get",
-      "this.incidents.get",
-      "save",
-      "this.incidents.set",
-      "this.incidents.clear"
+      "this.requireIncident"
     ],
-    "confidence": 0.82,
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "Could ID generation be injected? Deterministic IDs would make service tests more focused and remove assertions against unpredictable values.",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "constructor",
+        "add",
+        "create",
+        "Date",
+        "toISOString",
+        "this.store.save",
+        "randomUUID",
+        "transition",
+        "this.requireIncident",
+        "requireIncident",
+        "this.store.get",
+        "if",
+        "Error"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
+    "confidence": 0.754,
     "supportingEpisodes": [
       "6edd213659389125",
       "1d63e9ce11f2864d",
-      "21a71fe92d0bf384",
-      "731ac4871b6ad94c"
+      "21a71fe92d0bf384"
     ],
     "evidence": [
       {
@@ -467,15 +565,6 @@
         "reviewComment": "A domain-specific `IncidentNotFoundError` would avoid coupling the HTTP layer to the wording of this message.",
         "rejectedCode": "import { randomUUID } from \"node:crypto\";\nimport type { Incident, IncidentSeverity, IncidentStatus } from \"../domain/incident.js\";\nimport { IncidentStore } from \"../store/incident-store.js\";\n\nexport class IncidentService {\n  constructor(private readonly store: IncidentStore) {}\n\n  create(title: string, severity: IncidentSeverity): Incident {\n    const now = new Date().toISOString();\n    return this.store.save({\n      id: randomUUID(), title, severity, status: \"investigating\",\n      createdAt: now, updatedAt: now, notes: []\n    });\n  }\n\n  transition(id: string, status: IncidentStatus): Incident {\n    const incident = this.requireIncident(id);\n    return this.store.save({ ...incident, status, updatedAt: new Date().toISOString() });\n  }\n\n  requireIncident(id: string): Incident {\n    const incident = this.store.get(id);\n    if (!incident) throw new Error(`Incident ${id} was not found`);",
         "acceptedCode": "import { randomUUID } from \"node:crypto\";\nimport type { Incident, IncidentSeverity, IncidentStatus } from \"../domain/incident.js\";\nimport { IncidentStore } from \"../store/incident-store.js\";\nexport class IncidentService {\n  constructor(private readonly store: IncidentStore) {}\n  create(title: string, severity: IncidentSeverity): Incident {\n    const now = new Date().toISOString();\n    return this.store.save({\n      id: randomUUID(), title, severity, status: \"investigating\",\n      createdAt: now, updatedAt: now, notes: []\n  transition(id: string, status: IncidentStatus): Incident {\n    const incident = this.requireIncident(id);"
-      },
-      {
-        "episodeId": "731ac4871b6ad94c",
-        "pullRequest": 7,
-        "reviewer": "chene0",
-        "filePath": "src/store/incident-store.ts",
-        "reviewComment": "Should the store clone incidents at its boundary so callers cannot mutate the in-memory state without going through `save`?",
-        "rejectedCode": "import type { Incident } from \"../domain/incident.js\";\n\nexport class IncidentStore {\n  private readonly incidents = new Map<string, Incident>();",
-        "acceptedCode": "import type { Incident } from \"../domain/incident.js\";\nexport class IncidentStore {\n  private readonly incidents = new Map<string, Incident>();\n  list(): Incident[] {\n    return [...this.incidents.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));\n  get(id: string): Incident | undefined {\n    return this.incidents.get(id);\n  save(incident: Incident): Incident {\n    this.incidents.set(incident.id, incident);\n    return incident;\n    this.incidents.clear();"
       }
     ]
   },
@@ -526,6 +615,29 @@
       "this.incidents.clear",
       "clear"
     ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "Is `clear` strictly a test helper? If so, marking or documenting it as such would keep production code from depending on destructive reset behavior.",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "constructor",
+        "add",
+        "Date",
+        "toISOString",
+        "this.store.save",
+        "list",
+        "this.incidents.values",
+        "sort",
+        "b.createdAt.localeCompare",
+        "get",
+        "this.incidents.get",
+        "save",
+        "this.incidents.set",
+        "clear"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.754,
     "supportingEpisodes": [
       "0a643f46ba0b7b43",
@@ -563,6 +675,188 @@
     ]
   },
   {
+    "id": "6a0cd0b71e4c65ce",
+    "repository": "trace-watai/trace",
+    "title": "`read_index()` will raise if `index",
+    "rule": "`read_index()` will raise if `index.json` is present but corrupt/hand-edited, which can make index reads fatal for consumers even though the index is intended to be a rebuildable convenience. Consider handling validation/JSON errors here the same way `upsert_index_entry()` does by rebuilding (or at least returning an empty index) so callers of `read_index()` don’t have to duplicate defensive logic.",
+    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 2 pull requests; 2 include an accepted replacement.",
+    "category": "actionable-change",
+    "pathScopes": [
+      "src/trace_harness/tracing/**"
+    ],
+    "languages": [
+      "python"
+    ],
+    "prohibitedSignals": [
+      "index_path",
+      "read_index",
+      "empty",
+      "self.index_path",
+      "path.is_file",
+      "RunIndex",
+      "RunIndex.model_validate_json",
+      "path.read_text",
+      "the",
+      "upsert_index_entry",
+      "unreadable",
+      "atomic"
+    ],
+    "preferredSignals": [
+      "the",
+      "trace_harness.tracing.run_index",
+      "convenience",
+      "level",
+      "index_path",
+      "read_index"
+    ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "`read_index()` will raise if `index.json` is present but corrupt/hand-edited, which can make index reads fatal for consumers even though the index is intended to be a rebuildable convenience. Consider handling validation/JSON errors here the same way `upsert_index_entry()` does by rebuilding (or at least returning an empty index) so callers of `read_index()` don’t have to duplicate defensive logic.",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "index_path",
+        "read_index",
+        "empty",
+        "self.index_path",
+        "path.is_file",
+        "RunIndex",
+        "RunIndex.model_validate_json",
+        "path.read_text",
+        "the",
+        "upsert_index_entry",
+        "unreadable",
+        "atomic"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
+    "confidence": 0.754,
+    "supportingEpisodes": [
+      "7842ce6f5cc97c7c",
+      "2abcbbf69aacf8d0"
+    ],
+    "evidence": [
+      {
+        "episodeId": "7842ce6f5cc97c7c",
+        "pullRequest": 80,
+        "reviewer": "Copilot",
+        "filePath": "src/trace_harness/tracing/artifact_store.py",
+        "reviewComment": "`read_index()` will raise if `index.json` is present but corrupt/hand-edited, which can make index reads fatal for consumers even though the index is intended to be a rebuildable convenience. Consider handling validation/JSON errors here the same way `upsert_index_entry()` does by rebuilding (or at least returning an empty index) so callers of `read_index()` don’t have to duplicate defensive logic.",
+        "rejectedCode": "# --- run index ---\n\n    def index_path(self) -> Path:\n        return self.runs_dir / RUN_INDEX\n\n    def read_index(self) -> RunIndex:\n        \"\"\"Load the run index; a missing index is simply empty (rebuildable).\"\"\"\n        path = self.index_path()\n        if not path.is_file():\n            return RunIndex()\n        return RunIndex.model_validate_json(path.read_text(encoding=\"utf-8\"))",
+        "acceptedCode": "A runs-dir-level ``index.json`` sits alongside the run directories: one\nsummary entry per run for cheap listing without scanning every directory. It\nis a *derived, rebuildable* convenience (see :meth:`ArtifactStore.rebuild_index`),\nnot a per-run artifact — so it is deliberately absent from ``ALL_ARTIFACTS``\nand exempt from the per-run partial-artifacts promise.\nfrom trace_harness.tracing.run_index import RunIndex, RunIndexEntry\n# Runs-dir-level (not per-run): a derived, rebuildable index of all runs.\nRUN_INDEX = \"index.json\"\n    # --- run index ---\n    def index_path(self) -> Path:\n        return self.runs_dir / RUN_INDEX\n    def read_index(self) -> RunIndex:"
+      },
+      {
+        "episodeId": "2abcbbf69aacf8d0",
+        "pullRequest": 56,
+        "reviewer": "Copilot",
+        "filePath": "src/trace_harness/tracing/artifact_store.py",
+        "reviewComment": "`rebuild_index()` will currently raise (and prevent index self-heal) if any existing `run_result.json` is malformed JSON or missing required fields for `RunIndexEntry`. Since `upsert_index_entry()` relies on `rebuild_index()` to recover from a corrupt/hand-edited index, it’s more robust to skip invalid `run_result.json` files (optionally warning) rather than failing the entire rebuild.",
+        "rejectedCode": "# --- run index ---\n\n    def index_path(self) -> Path:\n        return self.runs_dir / RUN_INDEX\n\n    def read_index(self) -> RunIndex:\n        \"\"\"Load the run index; a missing index is simply empty (rebuildable).\"\"\"\n        path = self.index_path()\n        if not path.is_file():\n            return RunIndex()\n        return RunIndex.model_validate_json(path.read_text(encoding=\"utf-8\"))\n\n    def upsert_index_entry(self, entry: RunIndexEntry) -> None:\n        \"\"\"Add or replace ``entry`` in the index, keyed by ``run_id``.\n\n        The index is read defensively: missing → start empty; unreadable\n        (hand-edited or corrupt) → self-heal by rebuilding from the run\n        directories, so a bad index can't silently drop run history. Entries\n        stay sorted by ``run_id`` (chronological, like :meth:`list_runs`), and\n        the write is atomic (see :func:`_atomic_write_text`).\n        \"\"\"\n        try:\n            index = self.read_index()\n        except ValueError:\n            index = self.rebuild_index()\n        kept = [e for e in index.entries if e.run_id != entry.run_id]\n        kept.append(entry)\n        index.entries = sorted(kept, key=lambda e: e.run_id)\n        self._write_index(index)\n\n    def rebuild_index(self) -> RunIndex:\n        \"\"\"Reconstruct the index by scanning run dirs for ``run_result.json``.\n\n        Runs without a result (crashed before finalize) are skipped. The result\n        is written back atomically and returned.\n        \"\"\"\n        entries: list[RunIndexEntry] = []\n        for run_id in self.list_runs():\n            if not self.exists(run_id, RUN_RESULT):\n                continue\n            entries.append(RunIndexEntry.model_validate(self.read_json(run_id, RUN_RESULT)))\n        index = RunIndex(entries=sorted(entries, key=lambda e: e.run_id))",
+        "acceptedCode": "A runs-dir-level ``index.json`` sits alongside the run directories: one\nsummary entry per run for cheap listing without scanning every directory. It\nis a *derived, rebuildable* convenience (see :meth:`ArtifactStore.rebuild_index`),\nnot a per-run artifact — so it is deliberately absent from ``ALL_ARTIFACTS``\nand exempt from the per-run partial-artifacts promise.\nfrom trace_harness.tracing.run_index import RunIndex, RunIndexEntry\n# Runs-dir-level (not per-run): a derived, rebuildable index of all runs.\nRUN_INDEX = \"index.json\"\n    # --- run index ---\n    def index_path(self) -> Path:\n        return self.runs_dir / RUN_INDEX\n    def read_index(self) -> RunIndex:"
+      }
+    ]
+  },
+  {
+    "id": "c2fd5107e544f247",
+    "repository": "trace-watai/trace",
+    "title": "`_docs_must_be_resolvable` only checks for the presence of the `docs` key when `",
+    "rule": "`_docs_must_be_resolvable` only checks for the presence of the `docs` key when `available_docs` is set without a `docs_fixture`. This still allows tasks to reference doc_ids that are *not actually present* in `initial_state['docs']`, which contradicts the intent of “resolvable docs” and can lead to silent missing context at runtime.",
+    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 2 pull requests; 3 include an accepted replacement.",
+    "category": "actionable-change",
+    "pathScopes": [
+      "src/trace_harness/**"
+    ],
+    "languages": [
+      "python"
+    ],
+    "prohibitedSignals": [
+      "Field",
+      "targets",
+      "lowercase",
+      "docs_fixture",
+      "ages",
+      "ids",
+      "fail",
+      "expose",
+      "Darrel",
+      "task",
+      "label",
+      "field_validator",
+      "_next_seq"
+    ],
+    "preferredSignals": [
+      "pydantic",
+      "duplicate",
+      "reporting",
+      "collections.abc",
+      "_next_seq",
+      "re.compile",
+      "int",
+      "m.group",
+      "if",
+      "pattern.match",
+      "max",
+      "Field"
+    ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "`_docs_must_be_resolvable` only checks for the presence of the `docs` key when `available_docs` is set without a `docs_fixture`. This still allows tasks to reference doc_ids that are *not actually present* in `initial_state['docs']`, which contradicts the intent of “resolvable docs” and can lead to silent missing context at runtime.",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "Field",
+        "targets",
+        "lowercase",
+        "docs_fixture",
+        "ages",
+        "ids",
+        "fail",
+        "expose",
+        "Darrel",
+        "task",
+        "label",
+        "field_validator",
+        "_next_seq"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
+    "confidence": 0.754,
+    "supportingEpisodes": [
+      "8550fea7b38c7826",
+      "6d6e1bad5d2c87b6",
+      "5990d375097f51e4"
+    ],
+    "evidence": [
+      {
+        "episodeId": "8550fea7b38c7826",
+        "pullRequest": 53,
+        "reviewer": "Copilot",
+        "filePath": "src/trace_harness/tasks/schemas.py",
+        "reviewComment": "The `workflow_type` regex allows a single segment (e.g. \"w\"), but the description says \"Dotted workflow family\" which implies a dot is required. Either tighten the regex or (simpler, since existing tests use non-dotted values) adjust the description to say dots are optional.",
+        "rejectedCode": "schema_version: str = Field(\n        default=TASK_SCHEMA_VERSION,\n        pattern=r\"^\\d+\\.\\d+\\.\\d+$\",\n        description=\"Semantic version of the task schema this fixture targets (e.g. '0.1.0').\",\n    )\n    task_id: str = Field(\n        ...,\n        pattern=r\"^[a-z0-9][a-z0-9_-]*$\",\n        description=(\n            \"Stable lowercase slug, unique across the task bank; matches the fixture file name.\"\n        ),\n    )\n    title: str = Field(\n        ...,\n        min_length=1,\n        description=\"Short one-line human label for dashboards and reports.\",\n    )\n    description: str = Field(\n        ...,\n        min_length=1,\n        description=\"Scenario context: the situation, the knowledge base, and why it is tricky.\",\n    )\n    goal: str = Field(\n        ...,\n        min_length=1,\n        description=\"The agent's objective in one sentence — what a correct run accomplishes.\",\n    )\n    workflow_type: str = Field(\n        ...,\n        pattern=r\"^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)*$\",\n        description=(\n            \"Dotted workflow family, lowercase (e.g. 'support.refund'). Free string for now; \"\n            \"may become an enum once families settle — coordinate with runner/environment.\"\n        ),",
+        "acceptedCode": "      minimal unit-test stubs — slug/version/workflow shapes, no duplicate\n      (empty tool/verifier lists are allowed) so other modules can build stub\n      tasks in their unit tests.\n    - **Authoring quality** (``tasks/validation.py`` + the task-validity\n      rubric, applied to real fixtures under ``fixtures/tasks/``): the\n      stricter \"is this a *good* task to evaluate on\" checks — non-empty\n      tools/verifiers/failure-modes, describes correct behavior, no clocks in\n# once we settle on how multi-turn tasks represent the inbound conversation\n# (touches the runner's transcript builder — coordinate with Rupert).\nfrom pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator\nTASK_SCHEMA_VERSION = \"0.2.0\"\n    \"\"\"How hard a task is, for suite balance and reporting (Task Design Guide)."
+      },
+      {
+        "episodeId": "6d6e1bad5d2c87b6",
+        "pullRequest": 53,
+        "reviewer": "Copilot",
+        "filePath": "src/trace_harness/tasks/schemas.py",
+        "reviewComment": "`_docs_must_be_resolvable` only checks for the presence of the `docs` key when `available_docs` is set without a `docs_fixture`. This still allows tasks to reference doc_ids that are *not actually present* in `initial_state['docs']`, which contradicts the intent of “resolvable docs” and can lead to silent missing context at runtime.",
+        "rejectedCode": "schema_version: str = Field(\n        default=TASK_SCHEMA_VERSION,\n        pattern=r\"^\\d+\\.\\d+\\.\\d+$\",\n        description=\"Semantic version of the task schema this fixture targets (e.g. '0.1.0').\",\n    )\n    task_id: str = Field(\n        ...,\n        pattern=r\"^[a-z0-9][a-z0-9_-]*$\",\n        description=(\n            \"Stable lowercase slug, unique across the task bank; matches the fixture file name.\"\n        ),\n    )\n    title: str = Field(\n        ...,\n        min_length=1,\n        description=\"Short one-line human label for dashboards and reports.\",\n    )\n    description: str = Field(\n        ...,\n        min_length=1,\n        description=\"Scenario context: the situation, the knowledge base, and why it is tricky.\",\n    )\n    goal: str = Field(\n        ...,\n        min_length=1,\n        description=\"The agent's objective in one sentence — what a correct run accomplishes.\",\n    )\n    workflow_type: str = Field(\n        ...,\n        pattern=r\"^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)*$\",\n        description=(\n            \"Dotted workflow family, lowercase (e.g. 'support.refund'). Free string for now; \"\n            \"may become an enum once families settle — coordinate with runner/environment.\"\n        ),\n    )\n    initial_state: dict[str, Any] = Field(\n        ...,\n        description=(\n            \"Complete starting world for the environment to load. Must be deterministic: no \"\n            \"clocks/timestamps/randomness — encode time as relative ages (e.g. purchase_age_days).\"\n        ),\n    )\n    available_tools: list[str] = Field(\n        ...,\n        description=\"Tool names the agent may call; must match the environment's registered tools.\",\n    )\n    available_docs: list[str] = Field(\n        default_factory=list,\n        description=\"Doc ids (from docs_fixture) to load; empty for pure tool tasks.\",\n    )\n    docs_fixture: str | None = Field(\n        default=None,\n        description=(\n            \"Path to a docs fixture, relative to the task file. Required when available_docs \"\n            \"is set and docs are not inline under initial_state['docs'].\"\n        ),\n    )\n    expected_behavior: list[str] = Field(\n        default_factory=list,\n        description=\"Concrete, checkable statements describing what a correct run does.\",\n    )\n    forbidden_actions: list[str] = Field(\n        default_factory=list,\n        description=(\n            \"Actions a correct run must avoid; violations are failures regardless of outcome.\"\n        ),\n    )\n    required_evidence: list[str] = Field(\n        default_factory=list,\n        description=\"Artifacts a verifier should observe to justify pass/fail (human commentary).\",\n    )\n    targeted_failure_modes: list[str] = Field(\n        default_factory=list,\n        description=(\n            \"Failure patterns this task is designed to expose (free strings for now). The \"\n            \"canonical vocabulary is co-owned with Darrel (Attribution) and should stay \"\n            \"consistent with the Judge's failure_category; not yet ratified.\"\n        ),\n    )\n    verifier_ids: list[str] = Field(\n        default_factory=list,\n        description=(\n            \"Ids of the deterministic verifiers that judge this task (resolved in verifiers/).\"\n        ),\n    )\n    severity: Severity = Field(\n        default=Severity.MEDIUM,\n        description=\"How bad it is if an agent fails this task; seeds downstream failure severity.\",\n    )\n    difficulty: Difficulty | None = Field(\n        default=None,\n        description=(\n            \"Optional calibration label (easy/medium/hard) for suite balance and reporting; \"\n            \"unset means not yet calibrated. Does not affect pass/fail.\"\n        ),\n    )\n    metadata: dict[str, Any] = Field(\n        default_factory=dict,\n        description=(\n            \"Free-form harness keys: fixture_script, user_message, positive_sibling_tasks, \"\n            \"design_owner. user_message becomes first-class once multi-turn shape settles.\"\n        ),\n    )\n\n    @field_validator(\"available_tools\", \"available_docs\", \"verifier_ids\", \"targeted_failure_modes\")\n    @classmethod\n    def _no_duplicate_entries(cls, value: list[str], info: ValidationInfo) -> list[str]:\n        seen: set[str] = set()\n        dupes: set[str] = set()\n        for entry in value:\n            if entry in seen:\n                dupes.add(entry)\n            seen.add(entry)\n        if dupes:\n            raise ValueError(f\"{info.field_name} contains duplicate entries: {sorted(dupes)}\")\n        return value\n\n    @model_validator(mode=\"after\")\n    def _docs_must_be_resolvable(self) -> TaskSpec:\n        \"\"\"If a task names doc ids, they must be resolvable — either via a\n        ``docs_fixture`` or inline ``initial_state['docs']`` — so the loader\n        never silently drops referenced docs.\"\"\"\n        if self.available_docs and self.docs_fixture is None and \"docs\" not in self.initial_state:\n            raise ValueError(\n                \"available_docs is set but there is no docs_fixture and no inline \"\n                \"initial_state['docs']; the referenced doc ids cannot be resolved\"\n            )\n        return self",
+        "acceptedCode": "    - **Structural** (here): rules every ``TaskSpec`` must satisfy, including\n      minimal unit-test stubs — slug/version/workflow shapes, no duplicate\n      list entries, resolvable docs. Deliberately lenient about *content*\n      (empty tool/verifier lists are allowed) so other modules can build stub\n      tasks in their unit tests.\n    - **Authoring quality** (``tasks/validation.py`` + the task-validity\n      rubric, applied to real fixtures under ``fixtures/tasks/``): the\n      stricter \"is this a *good* task to evaluate on\" checks — non-empty\n      tools/verifiers/failure-modes, describes correct behavior, no clocks in\n      state, multi-step. Those do NOT live here so they cannot break stubs.\n# once we settle on how multi-turn tasks represent the inbound conversation\n# (touches the runner's transcript builder — coordinate with Rupert)."
+      },
+      {
+        "episodeId": "5990d375097f51e4",
+        "pullRequest": 51,
+        "reviewer": "Copilot",
+        "filePath": "src/trace_harness/environment/state.py",
+        "reviewComment": "`_next_seq` returns `max(existing)+1`, not the “smallest sequence number” that avoids collisions (e.g. existing `REF-0001` and `REF-0003` would yield 4, not 2). Update the docstring to match the actual behavior so callers don’t assume gap-filling.",
+        "rejectedCode": "def _next_seq(prefix: str, existing_ids: Iterable[str]) -> int:\n    \"\"\"Smallest sequence number that won't collide with ``<prefix>-NNNN`` ids.\"\"\"",
+        "acceptedCode": "from collections.abc import Iterable\ndef _next_seq(prefix: str, existing_ids: Iterable[str]) -> int:\n    \"\"\"Smallest sequence number that won't collide with ``<prefix>-NNNN`` ids.\"\"\"\n    pattern = re.compile(rf\"{prefix}-(\\d+)$\")\n    taken = [int(m.group(1)) for i in existing_ids if (m := pattern.match(i))]\n    return max(taken, default=0) + 1\n    # ge=0 bounds: a sign typo in a fixture must fail loudly, not silently\n    purchase_age_days: int = Field(ge=0)\n    \"\"\"The complete mutable world of the support/refund environment.\n    ``initial_state`` (e.g. ``\"ordes\"``) must fail at load time, not produce\n    an empty world the agent then \"fails\" in for unrelated reasons.\n        # Seed ID counters past any pre-existing records so a scenario that"
+      }
+    ]
+  },
+  {
     "id": "4bcbbea2be511b6c",
     "repository": "chene0/ht6-dummy-repo",
     "title": "Could the introduction mention the intended audience—on-call engineers and incid",
@@ -577,6 +871,14 @@
     ],
     "prohibitedSignals": [],
     "preferredSignals": [],
+    "detection": {
+      "mode": "semantic",
+      "semanticDescription": "Could the introduction mention the intended audience—on-call engineers and incident commanders—before describing the implementation?",
+      "triggerSignals": [],
+      "forbiddenSignals": [],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.729,
     "supportingEpisodes": [
       "7d3cfc319b6d9983",
@@ -638,6 +940,14 @@
     ],
     "prohibitedSignals": [],
     "preferredSignals": [],
+    "detection": {
+      "mode": "semantic",
+      "semanticDescription": "Would pinning this image to a digest make production builds reproducible while still allowing automated dependency updates?",
+      "triggerSignals": [],
+      "forbiddenSignals": [],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "f1c20d40d45d82e9"
@@ -693,6 +1003,26 @@
       "response.json",
       "toMatchObject"
     ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "Could we assert the returned incident fields here? A bare status check would miss serialization and input-mapping regressions.",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "describe",
+        "buildApp",
+        "afterEach",
+        "async",
+        "app.close",
+        "it",
+        "app.inject",
+        "expect",
+        "toBe",
+        "response.json",
+        "toMatchObject"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "b6fa032907449c33"
@@ -739,6 +1069,18 @@
       "store.clear",
       "store.list"
     ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "Could this setup use a small incident factory too? It would make later ordering and update tests much easier to read.",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "describe",
+        "beforeEach",
+        "IncidentStore"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "16a199f7c4e4c61b"
@@ -788,6 +1130,23 @@
       "shutdown",
       "app.listen"
     ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "Should startup errors be caught and logged explicitly, particularly address-in-use failures that otherwise produce a raw rejection?",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "loadConfig",
+        "buildApp",
+        "shutdown",
+        "app.log.info",
+        "app.close",
+        "process.exit",
+        "process.on",
+        "app.listen"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "7a0f9290bdbe5f32",
@@ -848,6 +1207,18 @@
       "async",
       "reply.header"
     ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "Is `onSend` early enough for every error response, including failures thrown by serialization hooks? A test would clarify that behavior.",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "registerRequestContext",
+        "app.addHook",
+        "async"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "65f766ed81722fce"
@@ -891,6 +1262,20 @@
       "Date",
       "toISOString"
     ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "Once persistence is introduced, readiness should probably check that dependency rather than remaining unconditional. Can we leave a TODO?",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "registerHealthRoutes",
+        "app.get",
+        "async",
+        "Date",
+        "toISOString"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "f796cbf4a8899db4"
@@ -904,6 +1289,55 @@
         "reviewComment": "Once persistence is introduced, readiness should probably check that dependency rather than remaining unconditional. Can we leave a TODO?",
         "rejectedCode": "import type { FastifyInstance } from \"fastify\";\n\nexport function registerHealthRoutes(app: FastifyInstance): void {\n  app.get(\"/health\", async () => ({\n    status: \"ok\",\n    service: \"signaldesk\",\n    timestamp: new Date().toISOString()\n  }));\n\n  app.get(\"/ready\", async () => ({ ready: true }));",
         "acceptedCode": "import type { FastifyInstance } from \"fastify\";\nexport function registerHealthRoutes(app: FastifyInstance): void {\n  app.get(\"/health\", async () => ({\n    status: \"ok\",\n    service: \"signaldesk\",\n    timestamp: new Date().toISOString()\n  app.get(\"/ready\", async () => ({ ready: true }));"
+      }
+    ]
+  },
+  {
+    "id": "4b0d0302b72d5e5b",
+    "repository": "chene0/ht6-dummy-repo",
+    "title": "Should the store clone incidents at its boundary so callers cannot mutate the in",
+    "rule": "Should the store clone incidents at its boundary so callers cannot mutate the in-memory state without going through `save`?",
+    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 1 pull request; 1 include an accepted replacement.",
+    "category": "architecture",
+    "pathScopes": [
+      "src/store/**"
+    ],
+    "languages": [
+      "typescript"
+    ],
+    "prohibitedSignals": [],
+    "preferredSignals": [
+      "list",
+      "this.incidents.values",
+      "sort",
+      "b.createdAt.localeCompare",
+      "get",
+      "this.incidents.get",
+      "save",
+      "this.incidents.set",
+      "this.incidents.clear"
+    ],
+    "detection": {
+      "mode": "semantic",
+      "semanticDescription": "Should the store clone incidents at its boundary so callers cannot mutate the in-memory state without going through `save`?",
+      "triggerSignals": [],
+      "forbiddenSignals": [],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
+    "confidence": 0.66,
+    "supportingEpisodes": [
+      "731ac4871b6ad94c"
+    ],
+    "evidence": [
+      {
+        "episodeId": "731ac4871b6ad94c",
+        "pullRequest": 7,
+        "reviewer": "chene0",
+        "filePath": "src/store/incident-store.ts",
+        "reviewComment": "Should the store clone incidents at its boundary so callers cannot mutate the in-memory state without going through `save`?",
+        "rejectedCode": "import type { Incident } from \"../domain/incident.js\";\n\nexport class IncidentStore {\n  private readonly incidents = new Map<string, Incident>();",
+        "acceptedCode": "import type { Incident } from \"../domain/incident.js\";\nexport class IncidentStore {\n  private readonly incidents = new Map<string, Incident>();\n  list(): Incident[] {\n    return [...this.incidents.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));\n  get(id: string): Incident | undefined {\n    return this.incidents.get(id);\n  save(incident: Incident): Incident {\n    this.incidents.set(incident.id, incident);\n    return incident;\n    this.incidents.clear();"
       }
     ]
   },
@@ -944,6 +1378,25 @@
       "environmentSchema.parse",
       "loadConfig"
     ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "Binding to all interfaces is convenient for containers; should local development default to loopback to reduce accidental network exposure?",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "z.object",
+        "z.string",
+        "default",
+        "z.coerce.number",
+        "int",
+        "positive",
+        "max",
+        "z.enum",
+        "loadConfig",
+        "environmentSchema.parse"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "5ad271a0ebe9d556",
@@ -1003,6 +1456,22 @@
       "z.enum",
       "environmentSchema.parse"
     ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "Nice range validation. Can we add a configuration test for non-numeric values so the startup failure remains understandable?",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "z.object",
+        "z.string",
+        "default",
+        "z.coerce.number",
+        "int",
+        "positive",
+        "max"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "2f4ead2dd1f0a1b9"
@@ -1016,6 +1485,65 @@
         "reviewComment": "Nice range validation. Can we add a configuration test for non-numeric values so the startup failure remains understandable?",
         "rejectedCode": "import { z } from \"zod\";\n\nconst environmentSchema = z.object({\n  HOST: z.string().default(\"0.0.0.0\"),\n  PORT: z.coerce.number().int().positive().max(65535).default(3000),",
         "acceptedCode": "import { z } from \"zod\";\nconst environmentSchema = z.object({\n  HOST: z.string().default(\"0.0.0.0\"),\n  PORT: z.coerce.number().int().positive().max(65535).default(3000),\n  LOG_LEVEL: z.enum([\"debug\", \"info\", \"warn\", \"error\"]).default(\"info\")\nexport type ServiceConfig = z.infer<typeof environmentSchema>;\n  return environmentSchema.parse(environment);"
+      }
+    ]
+  },
+  {
+    "id": "be44587e3721f65f",
+    "repository": "chene0/ht6-dummy-repo",
+    "title": "Could commander eventually be a stable user ID rather than a display name",
+    "rule": "Could commander eventually be a stable user ID rather than a display name? It may be useful to reflect that distinction in the field name.",
+    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 1 pull request; 3 include an accepted replacement.",
+    "category": "actionable-change",
+    "pathScopes": [
+      "src/domain/**"
+    ],
+    "languages": [
+      "typescript"
+    ],
+    "prohibitedSignals": [],
+    "preferredSignals": [],
+    "detection": {
+      "mode": "semantic",
+      "semanticDescription": "Could commander eventually be a stable user ID rather than a display name? It may be useful to reflect that distinction in the field name.",
+      "triggerSignals": [],
+      "forbiddenSignals": [],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
+    "confidence": 0.66,
+    "supportingEpisodes": [
+      "062bd45e1c1e2176",
+      "7cee62f2da3eed5c",
+      "bada36b140606409"
+    ],
+    "evidence": [
+      {
+        "episodeId": "062bd45e1c1e2176",
+        "pullRequest": 5,
+        "reviewer": "chene0",
+        "filePath": "src/domain/incident.ts",
+        "reviewComment": "Do we want a documented meaning for each severity so API clients do not invent conflicting interpretations of sev1–sev3?",
+        "rejectedCode": "export type IncidentSeverity = \"sev1\" | \"sev2\" | \"sev3\";",
+        "acceptedCode": "export type IncidentSeverity = \"sev1\" | \"sev2\" | \"sev3\";\nexport type IncidentStatus = \"investigating\" | \"mitigating\" | \"resolved\";\nexport interface ResponderNote {\nexport interface Incident {\n  severity: IncidentSeverity;"
+      },
+      {
+        "episodeId": "7cee62f2da3eed5c",
+        "pullRequest": 5,
+        "reviewer": "chene0",
+        "filePath": "src/domain/incident.ts",
+        "reviewComment": "Could commander eventually be a stable user ID rather than a display name? It may be useful to reflect that distinction in the field name.",
+        "rejectedCode": "export type IncidentSeverity = \"sev1\" | \"sev2\" | \"sev3\";\nexport type IncidentStatus = \"investigating\" | \"mitigating\" | \"resolved\";\n\nexport interface ResponderNote {\n  id: string;\n  author: string;\n  message: string;\n  createdAt: string;\n}\n\nexport interface Incident {\n  id: string;\n  title: string;\n  severity: IncidentSeverity;\n  status: IncidentStatus;\n  commander?: string;",
+        "acceptedCode": "export type IncidentSeverity = \"sev1\" | \"sev2\" | \"sev3\";\nexport type IncidentStatus = \"investigating\" | \"mitigating\" | \"resolved\";\nexport interface ResponderNote {\n  id: string;\n  author: string;\n  message: string;\n  createdAt: string;\nexport interface Incident {\n  id: string;\n  title: string;\n  severity: IncidentSeverity;\n  status: IncidentStatus;"
+      },
+      {
+        "episodeId": "bada36b140606409",
+        "pullRequest": 5,
+        "reviewer": "chene0",
+        "filePath": "src/domain/incident.ts",
+        "reviewComment": "Are notes guaranteed to remain insertion-ordered, or should the contract require consumers to sort by `createdAt`?",
+        "rejectedCode": "export type IncidentSeverity = \"sev1\" | \"sev2\" | \"sev3\";\nexport type IncidentStatus = \"investigating\" | \"mitigating\" | \"resolved\";\n\nexport interface ResponderNote {\n  id: string;\n  author: string;\n  message: string;\n  createdAt: string;\n}\n\nexport interface Incident {\n  id: string;\n  title: string;\n  severity: IncidentSeverity;\n  status: IncidentStatus;\n  commander?: string;\n  createdAt: string;\n  updatedAt: string;\n  notes: ResponderNote[];",
+        "acceptedCode": "export type IncidentSeverity = \"sev1\" | \"sev2\" | \"sev3\";\nexport type IncidentStatus = \"investigating\" | \"mitigating\" | \"resolved\";\nexport interface ResponderNote {\n  id: string;\n  author: string;\n  message: string;\n  createdAt: string;\nexport interface Incident {\n  id: string;\n  title: string;\n  severity: IncidentSeverity;\n  status: IncidentStatus;"
       }
     ]
   },
@@ -1034,6 +1562,14 @@
     ],
     "prohibitedSignals": [],
     "preferredSignals": [],
+    "detection": {
+      "mode": "semantic",
+      "semanticDescription": "Is ES2022 intentionally aligned with the production Node image? If so, documenting that coupling would prevent accidental drift.",
+      "triggerSignals": [],
+      "forbiddenSignals": [],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "e1eedf7efa262228",
@@ -1075,6 +1611,14 @@
     ],
     "prohibitedSignals": [],
     "preferredSignals": [],
+    "detection": {
+      "mode": "semantic",
+      "semanticDescription": "Good strictness setting. Can we keep an eye on boundary parsing so unchecked request data does not get asserted around this protection?",
+      "triggerSignals": [],
+      "forbiddenSignals": [],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "02b9d8d2815daaa6"
@@ -1106,6 +1650,14 @@
     ],
     "prohibitedSignals": [],
     "preferredSignals": [],
+    "detection": {
+      "mode": "semantic",
+      "semanticDescription": "Should this package name be scoped now in case we eventually publish shared SignalDesk clients under the same organization?",
+      "triggerSignals": [],
+      "forbiddenSignals": [],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "a856d99b48cacf01"
@@ -1137,6 +1689,14 @@
     ],
     "prohibitedSignals": [],
     "preferredSignals": [],
+    "detection": {
+      "mode": "semantic",
+      "semanticDescription": "Could we add a non-watch development command for CI smoke tests and container debugging?",
+      "triggerSignals": [],
+      "forbiddenSignals": [],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "79cecdf20917b4b5"
@@ -1168,6 +1728,14 @@
     ],
     "prohibitedSignals": [],
     "preferredSignals": [],
+    "detection": {
+      "mode": "semantic",
+      "semanticDescription": "Since Fastify is the main runtime dependency, can we note the minimum supported Node version that this major release requires?",
+      "triggerSignals": [],
+      "forbiddenSignals": [],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "0ba1590753864cb8"
@@ -1199,6 +1767,14 @@
     ],
     "prohibitedSignals": [],
     "preferredSignals": [],
+    "detection": {
+      "mode": "semantic",
+      "semanticDescription": "Could we call out whether this API is intended for internal responders only? That boundary will influence authentication decisions later.",
+      "triggerSignals": [],
+      "forbiddenSignals": [],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "a1a2c3775d60f730"
@@ -1230,6 +1806,14 @@
     ],
     "prohibitedSignals": [],
     "preferredSignals": [],
+    "detection": {
+      "mode": "semantic",
+      "semanticDescription": "Should assignment be part of the first milestone, or is naming an incident commander enough for the initial workflow?",
+      "triggerSignals": [],
+      "forbiddenSignals": [],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.66,
     "supportingEpisodes": [
       "1746bd970e040535"
@@ -1243,6 +1827,410 @@
         "reviewComment": "Should assignment be part of the first milestone, or is naming an incident commander enough for the initial workflow?",
         "rejectedCode": "# SignalDesk product brief\n\nSignalDesk is a small incident coordination API for engineering teams.\nIt keeps active incidents, status changes, and responder notes in one place.\n\n## Initial goals\n\n- Create and assign operational incidents.",
         "acceptedCode": "# SignalDesk product brief\nSignalDesk is a small incident coordination API for engineering teams.\nIt keeps active incidents, status changes, and responder notes in one place.\n## Initial goals\n- Create and assign operational incidents.\n- Track severity and lifecycle transitions.\n- Record timestamped notes during mitigation.\n- Expose health and service metrics for operators.\nThe first release intentionally uses an in-memory store so the team can validate the API before choosing persistent storage."
+      }
+    ]
+  },
+  {
+    "id": "64d32a2ed747c366",
+    "repository": "trace-watai/trace",
+    "title": "Several imported names are unused (`Refund`, `RefundType`, `Ticket`)",
+    "rule": "Several imported names are unused (`Refund`, `RefundType`, `Ticket`). With Ruff (F401) enabled, this will fail lint; trim the import to only what the tests use.",
+    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 1 pull request; 4 include an accepted replacement.",
+    "category": "style",
+    "pathScopes": [
+      "tests/**"
+    ],
+    "languages": [
+      "python"
+    ],
+    "prohibitedSignals": [
+      "the",
+      "__future__",
+      "trace_harness.environment.registry",
+      "trace_harness.environment.retrieval",
+      "retrieval",
+      "search_docs",
+      "ascending",
+      "trace_harness.environment.state",
+      "SupportEnvironment",
+      "tool_specs",
+      "validate_call",
+      "execute",
+      "results",
+      "pydantic",
+      "SupportState",
+      "from_task",
+      "find_order",
+      "snapshot"
+    ],
+    "preferredSignals": [
+      "the",
+      "trace_harness.environment.registry",
+      "trace_harness.environment.retrieval",
+      "default_support_registry",
+      "retrieval",
+      "search_docs",
+      "ascending",
+      "__future__",
+      "trace_harness.environment.state",
+      "SupportEnvironment",
+      "tool_specs",
+      "validate_call",
+      "execute",
+      "results",
+      "_order",
+      "Order",
+      "_doc",
+      "Doc",
+      "SupportState",
+      "from_task",
+      "find_order",
+      "snapshot",
+      "_task",
+      "TaskSpec"
+    ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "Several imported names are unused (`Refund`, `RefundType`, `Ticket`). With Ruff (F401) enabled, this will fail lint; trim the import to only what the tests use.",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "the",
+        "__future__",
+        "trace_harness.environment.registry",
+        "trace_harness.environment.retrieval",
+        "retrieval",
+        "search_docs",
+        "ascending",
+        "trace_harness.environment.state",
+        "SupportEnvironment",
+        "tool_specs",
+        "validate_call",
+        "execute",
+        "results",
+        "pydantic",
+        "SupportState",
+        "from_task",
+        "find_order",
+        "snapshot"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
+    "confidence": 0.66,
+    "supportingEpisodes": [
+      "b20b40ae39924dd4",
+      "3a83589548a95432",
+      "ef04858d1483b455",
+      "e4ced74758200b29"
+    ],
+    "evidence": [
+      {
+        "episodeId": "b20b40ae39924dd4",
+        "pullRequest": 71,
+        "reviewer": "Copilot",
+        "filePath": "tests/test_tools.py",
+        "reviewComment": "`pytest` is imported but never used. With Ruff lint rules enabled (F401), this will fail CI; please remove the unused import.",
+        "rejectedCode": "\"\"\"Unit tests for the four support-environment tool handlers.\n\nHandlers are reached through ToolDefinition objects fetched from the default\nregistry — this keeps tests at the public-API boundary while exercising each\nhandler in isolation with a minimal in-memory SupportState.\n\nSide-effect contract under test:\n    search_docs   → read_only:             no state mutation\n    get_order     → read_only:             no state mutation\n    issue_refund  → external_irreversible: appends Refund, increments seq\n    create_ticket → external_durable:      appends Ticket, increments seq\n\"\"\"\n\nfrom __future__ import annotations\n\nimport pytest\n\nfrom trace_harness.environment.registry import default_support_registry",
+        "acceptedCode": "\"\"\"Unit tests for the four support-environment tool handlers.\nHandlers are reached through ToolDefinition objects fetched from the default\nregistry — this keeps tests at the public-API boundary while exercising each\nhandler in isolation with a minimal in-memory SupportState.\nSide-effect contract under test:\n    search_docs   → read_only:             no state mutation\n    get_order     → read_only:             no state mutation\n    issue_refund  → external_irreversible: appends Refund, increments seq\n    create_ticket → external_durable:      appends Ticket, increments seq\nfrom trace_harness.environment.registry import default_support_registry\nfrom trace_harness.environment.retrieval import RetrievedChunk\n_REGISTRY = default_support_registry()"
+      },
+      {
+        "episodeId": "3a83589548a95432",
+        "pullRequest": 71,
+        "reviewer": "Copilot",
+        "filePath": "tests/test_retrieval.py",
+        "reviewComment": "`pytest` is imported but never used. Ruff will flag this as F401; remove the unused import to keep lint passing.",
+        "rejectedCode": "\"\"\"Unit tests for deterministic keyword retrieval (retrieval.py).\n\nAll tests are offline and use in-memory Doc objects — no fixture files needed.\nThe function under test: search_docs(docs, query, status_filter, top_k, ranking_override).\n\nScoring contract:\n    - Each query token present in the doc title   → +2.0 pts\n    - Each query token present in the doc content → +1.0 pts\n    - Docs with score ≤ 0 are always excluded\n    - Ties break by doc_id ascending (lexicographic)\n\"\"\"\n\nfrom __future__ import annotations\n\nimport pytest\n\nfrom trace_harness.environment.retrieval import RetrievedChunk, search_docs",
+        "acceptedCode": "\"\"\"Unit tests for deterministic keyword retrieval (retrieval.py).\nAll tests are offline and use in-memory Doc objects — no fixture files needed.\nThe function under test: search_docs(docs, query, status_filter, top_k, ranking_override).\nScoring contract:\n    - Each query token present in the doc title   → +2.0 pts\n    - Each query token present in the doc content → +1.0 pts\n    - Docs with score ≤ 0 are always excluded\n    - Ties break by doc_id ascending (lexicographic)\nfrom trace_harness.environment.retrieval import RetrievedChunk, search_docs\n    title: str = \"\",\n    content: str = \"\",\n    \"\"\"Minimal Doc for unit tests; source defaults keep assertions simple.\"\"\""
+      },
+      {
+        "episodeId": "ef04858d1483b455",
+        "pullRequest": 71,
+        "reviewer": "Copilot",
+        "filePath": "tests/test_support_env.py",
+        "reviewComment": "`ToolRegistry` and `default_support_registry` are imported but never used, which will be reported by Ruff (F401). Remove them to keep lint passing.",
+        "rejectedCode": "\"\"\"Unit tests for SupportEnvironment (support_env.py).\n\nSupportEnvironment is the facade the runner drives. Tests cover:\n    - tool_specs() returns the task's available_tools subset\n    - validate_call() accepts valid calls and rejects invalid ones\n    - execute() dispatches correctly and returns error results (not crashes)\n    - Constructor rejects tool names not present in the registry\n\"\"\"\n\nfrom __future__ import annotations\n\nimport pytest\n\nfrom trace_harness.environment.registry import ToolRegistry, default_support_registry\nfrom trace_harness.environment.state import Doc, DocStatus, Order, SupportState",
+        "acceptedCode": "\"\"\"Unit tests for SupportEnvironment (support_env.py).\nSupportEnvironment is the facade the runner drives. Tests cover:\n    - tool_specs() returns the task's available_tools subset\n    - validate_call() accepts valid calls and rejects invalid ones\n    - execute() dispatches correctly and returns error results (not crashes)\n    - Constructor rejects tool names not present in the registry\nfrom __future__ import annotations\nfrom trace_harness.environment.state import Doc, DocStatus, Order, SupportState\ndef _order(name: str = \"Alice\", days: int = 10) -> Order:\n    return Order(\ndef _doc(doc_id: str = \"policy\", title: str = \"refund policy\") -> Doc:\n    return Doc(doc_id=doc_id, title=title, content=\"details\", status=DocStatus.CURRENT)"
+      },
+      {
+        "episodeId": "e4ced74758200b29",
+        "pullRequest": 71,
+        "reviewer": "Copilot",
+        "filePath": "tests/test_state.py",
+        "reviewComment": "Several imported names are unused (`Refund`, `RefundType`, `Ticket`). With Ruff (F401) enabled, this will fail lint; trim the import to only what the tests use.",
+        "rejectedCode": "\"\"\"Unit tests for SupportState (state.py).\n\nCovers: from_task() doc merging, find_order() case-insensitivity, snapshot()\nshape, sequence-counter seeding, and the doc_ranking_override field.\n\nAll tests construct state directly or via a minimal TaskSpec — no full\nfixture runs needed here.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport pytest\nfrom pydantic import ValidationError\n\nfrom trace_harness.environment.state import Doc, DocStatus, Order, Refund, RefundType, SupportState, Ticket",
+        "acceptedCode": "\"\"\"Unit tests for SupportState (state.py).\nCovers: from_task() doc merging, find_order() case-insensitivity, snapshot()\nshape, sequence-counter seeding, and the doc_ranking_override field.\nAll tests construct state directly or via a minimal TaskSpec — no full\nfixture runs needed here. Fixture-backed tests verify against real scenario data.\nfrom trace_harness.environment.state import Doc, DocStatus, Order, Refund, RefundType, SupportState, Ticket\ndef _task(**initial_state_overrides) -> TaskSpec:\n    \"\"\"Minimal TaskSpec with an overrideable initial_state.\"\"\"\n    return TaskSpec(\n        title=\"unit\",\n        description=\"unit\",\n        goal=\"unit\","
+      }
+    ]
+  },
+  {
+    "id": "47ab309db5e0b156",
+    "repository": "trace-watai/trace",
+    "title": "`ranking_override` is documented as preserving \"list order\", but building `order",
+    "rule": "`ranking_override` is documented as preserving \"list order\", but building `order_index` with a dict comprehension will use the *last* index when the override list contains duplicates, which breaks that contract. Preserve the first occurrence (or alternatively validate/reject duplicates).",
+    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 1 pull request; 1 include an accepted replacement.",
+    "category": "actionable-change",
+    "pathScopes": [
+      "src/trace_harness/environment/**"
+    ],
+    "languages": [
+      "python"
+    ],
+    "prohibitedSignals": [
+      "enumerate"
+    ],
+    "preferredSignals": [
+      "first",
+      "floor"
+    ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "`ranking_override` is documented as preserving \"list order\", but building `order_index` with a dict comprehension will use the *last* index when the override list contains duplicates, which breaks that contract. Preserve the first occurrence (or alternatively validate/reject duplicates).",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "enumerate"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
+    "confidence": 0.66,
+    "supportingEpisodes": [
+      "f53210f76259a2a2"
+    ],
+    "evidence": [
+      {
+        "episodeId": "f53210f76259a2a2",
+        "pullRequest": 71,
+        "reviewer": "Copilot",
+        "filePath": "src/trace_harness/environment/retrieval.py",
+        "reviewComment": "`ranking_override` is documented as preserving \"list order\", but building `order_index` with a dict comprehension will use the *last* index when the override list contains duplicates, which breaks that contract. Preserve the first occurrence (or alternatively validate/reject duplicates).",
+        "rejectedCode": "if ranking_override:\n        order_index = {doc_id: i for i, doc_id in enumerate(ranking_override)}",
+        "acceptedCode": "Ranking override\n    ``search_docs`` accepts an optional ``ranking_override`` — an ordered\n    list of ``doc_id`` strings supplied by a fixture. When present, matching\n    docs whose ``doc_id`` appears in the list are returned first (in list\n    order), followed by remaining matches sorted by score descending then\n    ``doc_id`` ascending. The relevance floor (score > 0) still applies;\n    the override only changes ordering, never injects irrelevant results.\n    ranking_override: list[str] | None = None,\n    \"\"\"Score ``docs`` against ``query`` and return the top matches, best first.\n    If ``ranking_override`` is provided it is treated as an ordered list of\n    ``doc_id`` strings: matching docs whose id appears in the list come first\n    (in list order), remaining matches follow sorted by score desc then"
+      }
+    ]
+  },
+  {
+    "id": "c1f24ad3ab7ec8f3",
+    "repository": "trace-watai/trace",
+    "title": "The module docstring references `tasks/validation",
+    "rule": "The module docstring references `tasks/validation.py` and a \"task-validity rubric\", but neither exists in the current codebase. This makes the schema contract docs misleading for contributors; consider describing this as a future fixture-validation layer without naming a non-existent module/file.",
+    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 1 pull request; 4 include an accepted replacement.",
+    "category": "testing",
+    "pathScopes": [
+      "**"
+    ],
+    "languages": [
+      "python"
+    ],
+    "prohibitedSignals": [
+      "validation",
+      "Field",
+      "targets",
+      "rules",
+      "tasks",
+      "__future__",
+      "pathlib",
+      "pydantic",
+      "trace_harness.tasks.loader",
+      "trace_harness.tasks.schemas",
+      "Path",
+      "resolve",
+      "_valid_kwargs",
+      "pytest.mark.parametrize",
+      "test_real_fixtures_load"
+    ],
+    "preferredSignals": [
+      "validation",
+      "pydantic",
+      "reporting",
+      "trace_harness.tasks.loader",
+      "trace_harness.tasks.schemas",
+      "rules",
+      "tasks",
+      "TaskSpec",
+      "_valid_kwargs",
+      "empty",
+      "__future__",
+      "pathlib",
+      "Path",
+      "resolve"
+    ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "The module docstring references `tasks/validation.py` and a \"task-validity rubric\", but neither exists in the current codebase. This makes the schema contract docs misleading for contributors; consider describing this as a future fixture-validation layer without naming a non-existent module/file.",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "validation",
+        "Field",
+        "targets",
+        "rules",
+        "tasks",
+        "__future__",
+        "pathlib",
+        "pydantic",
+        "trace_harness.tasks.loader",
+        "trace_harness.tasks.schemas",
+        "Path",
+        "resolve",
+        "_valid_kwargs",
+        "pytest.mark.parametrize",
+        "test_real_fixtures_load"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
+    "confidence": 0.66,
+    "supportingEpisodes": [
+      "a2f63eb442890a16",
+      "83a5959d309487cf",
+      "4fe40cc569105291",
+      "634ed86cb923d814"
+    ],
+    "evidence": [
+      {
+        "episodeId": "a2f63eb442890a16",
+        "pullRequest": 53,
+        "reviewer": "Copilot",
+        "filePath": "src/trace_harness/tasks/schemas.py",
+        "reviewComment": "The module docstring references `tasks/validation.py` and a \"task-validity rubric\", but neither exists in the current codebase. This makes the schema contract docs misleading for contributors; consider describing this as a future fixture-validation layer without naming a non-existent module/file.",
+        "rejectedCode": "Two layers of validation (keep them separate)\n    - **Structural** (here): rules every ``TaskSpec`` must satisfy, including\n      minimal unit-test stubs — slug/version/workflow shapes, no duplicate\n      list entries, resolvable docs. Deliberately lenient about *content*\n      (empty tool/verifier lists are allowed) so other modules can build stub\n      tasks in their unit tests.\n    - **Authoring quality** (``tasks/validation.py`` + the task-validity\n      rubric, applied to real fixtures under ``fixtures/tasks/``): the\n      stricter \"is this a *good* task to evaluate on\" checks — non-empty\n      tools/verifiers/failure-modes, describes correct behavior, no clocks in\n      state, multi-step. Those do NOT live here so they cannot break stubs.",
+        "acceptedCode": "Two layers of validation (keep them separate)\n    - **Structural** (here): rules every ``TaskSpec`` must satisfy, including\n      minimal unit-test stubs — slug/version/workflow shapes, no duplicate\n      list entries, resolvable docs. Deliberately lenient about *content*\n      (empty tool/verifier lists are allowed) so other modules can build stub\n      tasks in their unit tests.\n    - **Authoring quality** (``tasks/validation.py`` + the task-validity\n      rubric, applied to real fixtures under ``fixtures/tasks/``): the\n      stricter \"is this a *good* task to evaluate on\" checks — non-empty\n      tools/verifiers/failure-modes, describes correct behavior, no clocks in\n      state, multi-step. Those do NOT live here so they cannot break stubs.\n# once we settle on how multi-turn tasks represent the inbound conversation"
+      },
+      {
+        "episodeId": "83a5959d309487cf",
+        "pullRequest": 53,
+        "reviewer": "Copilot",
+        "filePath": "src/trace_harness/tasks/schemas.py",
+        "reviewComment": "The `schema_version` field description example still references `'0.1.0'`, but `TASK_SCHEMA_VERSION` is now `0.2.0`. Updating the example avoids confusing fixture authors about the current expected version string.",
+        "rejectedCode": "schema_version: str = Field(\n        default=TASK_SCHEMA_VERSION,\n        pattern=r\"^\\d+\\.\\d+\\.\\d+$\",\n        description=\"Semantic version of the task schema this fixture targets (e.g. '0.1.0').\",",
+        "acceptedCode": "      minimal unit-test stubs — slug/version/workflow shapes, no duplicate\n      list entries, resolvable docs. Deliberately lenient about *content*\n    - **Authoring quality** (``tasks/validation.py`` + the task-validity\n      rubric, applied to real fixtures under ``fixtures/tasks/``): the\n      stricter \"is this a *good* task to evaluate on\" checks — non-empty\n# once we settle on how multi-turn tasks represent the inbound conversation\n# (touches the runner's transcript builder — coordinate with Rupert).\nfrom pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator\nTASK_SCHEMA_VERSION = \"0.2.0\"\n    \"\"\"How hard a task is, for suite balance and reporting (Task Design Guide).\n    Distinct from ``Severity``: difficulty is about how demanding the scenario\n    is for the agent; severity is about how bad a *failure* would be. Optional on"
+      },
+      {
+        "episodeId": "4fe40cc569105291",
+        "pullRequest": 53,
+        "reviewer": "Copilot",
+        "filePath": "tests/test_task_schema.py",
+        "reviewComment": "This docstring references `tasks/validation.py` + a rubric, but there is no such module/file in the current repository. Consider rewording to describe this as a future fixture-validation layer so readers aren’t sent looking for non-existent code.",
+        "rejectedCode": "\"\"\"Structural validation tests for TaskSpec.\n\nThese cover the *schema-level* rules only — the universal structural contract.\nAuthoring-quality rules (non-empty tools/verifiers, describes behavior, no\nclocks, multi-step) live in tasks/validation.py + the rubric and are tested\nseparately, so minimal stub tasks (e.g. in test_refund_verifier) stay valid.",
+        "acceptedCode": "\"\"\"Structural validation tests for TaskSpec.\nThese cover the *schema-level* rules only — the universal structural contract.\nAuthoring-quality rules (non-empty tools/verifiers, describes behavior, no\nclocks, multi-step) live in tasks/validation.py + the rubric and are tested\nseparately, so minimal stub tasks (e.g. in test_refund_verifier) stay valid.\nfrom trace_harness.tasks.loader import load_task\nfrom trace_harness.tasks.schemas import TaskSpec\nTASKS_DIR = REPO_ROOT / \"fixtures\" / \"tasks\"\n    \"\"\"Minimal kwargs that satisfy the structural schema.\"\"\"\n# --- the real fixtures must still load -------------------------------------\n        TaskSpec(**_valid_kwargs(), typo_field=1)\n# --- required text fields reject empty (min_length) ------------------------"
+      },
+      {
+        "episodeId": "634ed86cb923d814",
+        "pullRequest": 53,
+        "reviewer": "Copilot",
+        "filePath": "tests/test_task_schema.py",
+        "reviewComment": "The test docstring says these checks are enforced by `validate-fixtures`, but there is currently no validate-fixtures command/module in this repo (only a TODO in `tasks/loader.py`). Rewording avoids implying an enforcement mechanism that doesn’t yet exist.",
+        "rejectedCode": "\"\"\"Structural validation tests for TaskSpec.\n\nThese cover the *schema-level* rules only — the universal structural contract.\nAuthoring-quality rules (non-empty tools/verifiers, describes behavior, no\nclocks, multi-step) live in tasks/validation.py + the rubric and are tested\nseparately, so minimal stub tasks (e.g. in test_refund_verifier) stay valid.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom pathlib import Path\n\nimport pytest\nfrom pydantic import ValidationError\n\nfrom trace_harness.tasks.loader import load_task\nfrom trace_harness.tasks.schemas import TaskSpec\n\nREPO_ROOT = Path(__file__).resolve().parents[1]\nTASKS_DIR = REPO_ROOT / \"fixtures\" / \"tasks\"\nVALID_TASK_PATH = TASKS_DIR / \"refund_policy_valid_cash.json\"\nFAILURE_TASK_PATH = TASKS_DIR / \"refund_policy_failure.json\"\n\n\ndef _valid_kwargs() -> dict:\n    \"\"\"Minimal kwargs that satisfy the structural schema.\"\"\"\n    return {\n        \"task_id\": \"unit_task\",\n        \"title\": \"unit\",\n        \"description\": \"unit\",\n        \"goal\": \"unit\",\n        \"workflow_type\": \"support.refund\",\n        \"initial_state\": {},\n        \"available_tools\": [\"get_order\"],\n    }\n\n\n# --- the real fixtures must still load -------------------------------------\n\n\n@pytest.mark.parametrize(\"path\", [VALID_TASK_PATH, FAILURE_TASK_PATH])\ndef test_real_fixtures_load(path) -> None:\n    task = load_task(path)\n    assert task.task_id\n\n\n# --- extra=\"forbid\" --------------------------------------------------------\n\n\ndef test_unknown_field_is_rejected() -> None:\n    with pytest.raises(ValidationError, match=\"Extra inputs\"):\n        TaskSpec(**_valid_kwargs(), typo_field=1)\n\n\n# --- required text fields reject empty (min_length) ------------------------\n\n\n@pytest.mark.parametrize(\"field\", [\"title\", \"description\", \"goal\"])\ndef test_required_text_fields_reject_empty(field: str) -> None:\n    with pytest.raises(ValidationError, match=\"at least 1 character\"):\n        TaskSpec(**{**_valid_kwargs(), field: \"\"})\n\n\n# --- task_id slug pattern --------------------------------------------------\n\n\n@pytest.mark.parametrize(\"bad_id\", [\"Refund_Task\", \"refund task\", \"-leading\", \"réfund\"])\ndef test_task_id_must_be_a_slug(bad_id: str) -> None:\n    with pytest.raises(ValidationError, match=\"should match pattern\"):\n        TaskSpec(**{**_valid_kwargs(), \"task_id\": bad_id})\n\n\n# --- workflow_type pattern -------------------------------------------------\n\n\n@pytest.mark.parametrize(\"bad_wf\", [\"Support.Refund\", \"support refund\", \"support.\"])\ndef test_workflow_type_must_be_dotted_lowercase(bad_wf: str) -> None:\n    with pytest.raises(ValidationError, match=\"should match pattern\"):\n        TaskSpec(**{**_valid_kwargs(), \"workflow_type\": bad_wf})\n\n\n# --- schema_version semver -------------------------------------------------\n\n\ndef test_schema_version_must_be_semver() -> None:\n    with pytest.raises(ValidationError, match=\"should match pattern\"):\n        TaskSpec(**{**_valid_kwargs(), \"schema_version\": \"v1\"})\n\n\n# --- uniqueness (all four list fields) -------------------------------------\n\n\n@pytest.mark.parametrize(\n    \"field\", [\"available_tools\", \"available_docs\", \"verifier_ids\", \"targeted_failure_modes\"]\n)\ndef test_duplicate_list_entries_rejected(field: str) -> None:\n    with pytest.raises(ValidationError, match=\"duplicate entries\"):\n        TaskSpec(**{**_valid_kwargs(), field: [\"dup\", \"dup\"]})\n\n\n# --- difficulty (optional, enum-validated) ---------------------------------\n\n\ndef test_difficulty_is_optional_and_validated() -> None:\n    assert TaskSpec(**_valid_kwargs()).difficulty is None\n    assert TaskSpec(**{**_valid_kwargs(), \"difficulty\": \"hard\"}).difficulty == \"hard\"\n    with pytest.raises(ValidationError, match=\"Input should be\"):\n        TaskSpec(**{**_valid_kwargs(), \"difficulty\": \"trivial\"})\n\n\n# --- docs resolvability ----------------------------------------------------\n\n\ndef test_available_docs_without_source_is_rejected() -> None:\n    with pytest.raises(ValidationError, match=\"cannot be resolved\"):\n        TaskSpec(**{**_valid_kwargs(), \"available_docs\": [\"policy_v4\"]})\n\n\ndef test_available_docs_with_inline_docs_ok() -> None:\n    task = TaskSpec(\n        **{\n            **_valid_kwargs(),\n            \"available_docs\": [\"policy_v4\"],\n            \"initial_state\": {\"docs\": [{\"doc_id\": \"policy_v4\"}]},\n        }\n    )\n    assert task.available_docs == [\"policy_v4\"]\n\n\n# --- leniency the schema must preserve (so stubs keep working) -------------\n\n\ndef test_empty_content_lists_are_structurally_valid() -> None:\n    \"\"\"available_tools=[] and no verifier/failure-mode lists must parse — those\n    are authoring-quality concerns, enforced by validate-fixtures, not here.\"\"\"",
+        "acceptedCode": "\"\"\"Structural validation tests for TaskSpec.\nThese cover the *schema-level* rules only — the universal structural contract.\nAuthoring-quality rules (non-empty tools/verifiers, describes behavior, no\nclocks, multi-step) live in tasks/validation.py + the rubric and are tested\nseparately, so minimal stub tasks (e.g. in test_refund_verifier) stay valid.\nfrom __future__ import annotations\nfrom pathlib import Path\nimport pytest\nfrom pydantic import ValidationError\nfrom trace_harness.tasks.loader import load_task\nfrom trace_harness.tasks.schemas import TaskSpec\nREPO_ROOT = Path(__file__).resolve().parents[1]"
+      }
+    ]
+  },
+  {
+    "id": "213b78da807a6dd9",
+    "repository": "trace-watai/trace",
+    "title": "`test_dotenv_parsing_handles_real_world_syntax` currently passes a mix of `str` ",
+    "rule": "`test_dotenv_parsing_handles_real_world_syntax` currently passes a mix of `str` literals and a `.encode()` expression to `Path.write_bytes()`, which is invalid syntax/typing for bytes construction and will fail to run. Write the file as text (or build a single bytes object) so the test actually executes.",
+    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 1 pull request; 1 include an accepted replacement.",
+    "category": "testing",
+    "pathScopes": [
+      "tests/**"
+    ],
+    "languages": [
+      "python"
+    ],
+    "prohibitedSignals": [
+      "__future__",
+      "pathlib",
+      "trace_harness.config",
+      "test_dotenv_parsing_handles_real_world_syntax",
+      "env.write_bytes",
+      "encode"
+    ],
+    "preferredSignals": [
+      "__future__",
+      "pathlib",
+      "trace_harness.config",
+      "test_dotenv_parsing_handles_real_world_syntax",
+      "env.write_bytes",
+      "encode"
+    ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "`test_dotenv_parsing_handles_real_world_syntax` currently passes a mix of `str` literals and a `.encode()` expression to `Path.write_bytes()`, which is invalid syntax/typing for bytes construction and will fail to run. Write the file as text (or build a single bytes object) so the test actually executes.",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "__future__",
+        "pathlib",
+        "trace_harness.config",
+        "test_dotenv_parsing_handles_real_world_syntax",
+        "env.write_bytes",
+        "encode"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
+    "confidence": 0.66,
+    "supportingEpisodes": [
+      "58327cac1d0c3cc3"
+    ],
+    "evidence": [
+      {
+        "episodeId": "58327cac1d0c3cc3",
+        "pullRequest": 51,
+        "reviewer": "Copilot",
+        "filePath": "tests/test_config.py",
+        "reviewComment": "`test_dotenv_parsing_handles_real_world_syntax` currently passes a mix of `str` literals and a `.encode()` expression to `Path.write_bytes()`, which is invalid syntax/typing for bytes construction and will fail to run. Write the file as text (or build a single bytes object) so the test actually executes.",
+        "rejectedCode": "\"\"\"Harness config: dotenv parsing edge cases and env-var fallbacks.\"\"\"\n\nfrom __future__ import annotations\n\nimport os\nfrom pathlib import Path\n\nfrom trace_harness.config import HarnessConfig, load_env_file\n\n\ndef test_dotenv_parsing_handles_real_world_syntax(tmp_path):\n    env = tmp_path / \".env\"\n    env.write_bytes(\n        \"﻿ZZQ_BOM_KEY=1\\n\"\n        \"export ZZQ_EXPORTED=abc\\n\"\n        \"ZZQ_COMMENTED=./runs # artifacts here\\n\"\n        'ZZQ_QUOTED=\"quoted # not a comment\"\\n'.encode()\n    )",
+        "acceptedCode": "\"\"\"Harness config: dotenv parsing edge cases and env-var fallbacks.\"\"\"\nfrom __future__ import annotations\nimport os\nfrom pathlib import Path\nfrom trace_harness.config import HarnessConfig, load_env_file\ndef test_dotenv_parsing_handles_real_world_syntax(tmp_path):\n    env = tmp_path / \".env\"\n    env.write_bytes(\n        \"﻿ZZQ_BOM_KEY=1\\n\"\n        \"export ZZQ_EXPORTED=abc\\n\"\n        \"ZZQ_COMMENTED=./runs # artifacts here\\n\"\n        'ZZQ_QUOTED=\"quoted # not a comment\"\\n'.encode()"
+      }
+    ]
+  },
+  {
+    "id": "35ca16c2e3d93260",
+    "repository": "trace-watai/trace",
+    "title": "`_check_final_answer_consistency` can miss a real inconsistency when the answer ",
+    "rule": "`_check_final_answer_consistency` can miss a real inconsistency when the answer both (a) denies a refund (e.g. “can't issue cash refund”) and (b) claims an issued refund/store credit (“processed store credit”), but `state.refunds` is empty. The current `not denies_refund` guard suppresses the failure, so an ungrounded issuance claim can slip through as long as any denial phrase appears elsewhere in the answer.",
+    "rationale": "The accepted implementation replaced the reviewed pattern with the preferred pattern. Observed in 1 pull request; 1 include an accepted replacement.",
+    "category": "actionable-change",
+    "pathScopes": [
+      "src/trace_harness/verifiers/**"
+    ],
+    "languages": [
+      "python"
+    ],
+    "prohibitedSignals": [
+      "being",
+      "words"
+    ],
+    "preferredSignals": [
+      "being",
+      "_OUTAGE_CLAIM_RE.search",
+      "_OUTAGE_NEGATION_RE.search",
+      "words"
+    ],
+    "detection": {
+      "mode": "forbidden-signal",
+      "semanticDescription": "`_check_final_answer_consistency` can miss a real inconsistency when the answer both (a) denies a refund (e.g. “can't issue cash refund”) and (b) claims an issued refund/store credit (“processed store credit”), but `state.refunds` is empty. The current `not denies_refund` guard suppresses the failure, so an ungrounded issuance claim can slip through as long as any denial phrase appears elsewhere in the answer.",
+      "triggerSignals": [],
+      "forbiddenSignals": [
+        "being",
+        "words"
+      ],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
+    "confidence": 0.66,
+    "supportingEpisodes": [
+      "15a4b014f5a29fef"
+    ],
+    "evidence": [
+      {
+        "episodeId": "15a4b014f5a29fef",
+        "pullRequest": 51,
+        "reviewer": "Copilot",
+        "filePath": "src/trace_harness/verifiers/refund_policy.py",
+        "reviewComment": "`_check_final_answer_consistency` can miss a real inconsistency when the answer both (a) denies a refund (e.g. “can't issue cash refund”) and (b) claims an issued refund/store credit (“processed store credit”), but `state.refunds` is empty. The current `not denies_refund` guard suppresses the failure, so an ungrounded issuance claim can slip through as long as any denial phrase appears elsewhere in the answer.",
+        "rejectedCode": "# A denial alongside claim-words (\"no refund has been issued\", \"can't\n        # issue cash but processed store credit\") is not a phantom claim —\n        # requiring the absence of the opposite signal keeps correct denials\n        # and truthful mixed answers from being flagged.\n        if claims_issued and not denies_refund and not refunds_exist:",
+        "acceptedCode": "    \"\"\"True if any sentence-ish chunk asserts an outage without negating it.\n    was impacted by the January outage.\" contains a real claim in the second\n    sentence that a whole-text negation guard would wrongly suppress.\n        if _OUTAGE_CLAIM_RE.search(chunk) and not _OUTAGE_NEGATION_RE.search(chunk):\n                \"multiple current policy docs with rules found; using the most \"\n        # A denial alongside claim-words (\"no refund has been issued\", \"can't\n        # issue cash but processed store credit\") is not a phantom claim —\n        # requiring the absence of the opposite signal keeps correct denials\n        # and truthful mixed answers from being flagged.\n        if claims_issued and not denies_refund and not refunds_exist:\n        if refunds_exist and denies_refund and not claims_issued:"
       }
     ]
   },
@@ -1261,6 +2249,14 @@
     ],
     "prohibitedSignals": [],
     "preferredSignals": [],
+    "detection": {
+      "mode": "semantic",
+      "semanticDescription": "This copies development dependencies into production. Could the build stage prune them or run a separate production-only install?",
+      "triggerSignals": [],
+      "forbiddenSignals": [],
+      "requiredSignals": [],
+      "matchScope": "line"
+    },
     "confidence": 0.61,
     "supportingEpisodes": [
       "4447cbc929e878c8",

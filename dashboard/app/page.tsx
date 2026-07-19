@@ -23,9 +23,26 @@ export default async function DashboardPage() {
         <div className="heading-context">
           <span>{data.source === "live" ? "Live memory" : "Demo data"}</span>
           <span>{data.repository}</span>
+          {data.viewer ? <span>@{data.viewer.login}</span> : null}
           <span className="period-label">All merged PRs</span>
+          {data.viewer
+            ? <a className="auth-link secondary" href="/api/auth/signout">Sign out</a>
+            : <a className="auth-link" href="/api/auth/github">Sign in with GitHub</a>}
         </div>
       </section>
+
+      {data.connection === "authentication-required" ? (
+        <section className="connection-banner">
+          <strong>Connect GitHub to load repository memory.</strong>
+          <span>The dashboard is showing demo data until you sign in.</span>
+        </section>
+      ) : null}
+      {data.connection === "api-error" ? (
+        <section className="connection-banner error">
+          <strong>Repository memory could not be loaded.</strong>
+          <span>Confirm that the API is running and this GitHub account can access {data.repository}.</span>
+        </section>
+      ) : null}
 
       <section className="metric-grid" aria-label="Review summary">
         <article className="metric-card">
@@ -139,7 +156,7 @@ export default async function DashboardPage() {
 
       <footer>
         <span>Updated from merged pull request history</span>
-        <span>{data.source === "live" ? "Connected to Engineering Memory API" : "Connect the API to replace demo data"}</span>
+        <span>{data.source === "live" ? "Connected to Engineering Memory API" : "Demo data is currently displayed"}</span>
       </footer>
     </main>
   );
