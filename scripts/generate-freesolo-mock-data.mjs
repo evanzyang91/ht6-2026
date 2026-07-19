@@ -20,6 +20,9 @@ const systemInstruction = [
   "The application derives legacy preferredSignals and prohibitedSignals; do not return them. Use forbidden-signal only",
   "when acceptedCode removes or replaces a disallowed construct. Prefer the smallest reusable exact",
   "substring over an entire code line. Treat feature flags as architecture/release-control conventions.",
+  "The rule must synthesize reusable, normative engineering knowledge from the comment plus code and path context.",
+  "Do not quote or lightly paraphrase reviewComment. Resolve this, it, and here; name the applicable code scope;",
+  "state an invariant independent of this PR; and do not mention the reviewer or end actionable rules as questions.",
 ].join(" ");
 
 function semanticDetection(description) {
@@ -149,15 +152,15 @@ const train = [
   ),
   row(
     { repository: "acme/api", pullRequest: 290, filePath: "src/factories/order.ts", reviewComment: "Why is this factory responsible for sending the notification?", rejectedCode: "await notifier.send(order)", acceptedCode: "" },
-    { intent: "question-nonactionable", title: "Question about factory responsibility", rule: "The reviewer is asking for clarification about why the factory sends notifications.", rationale: "The comment is a question and no accepted replacement demonstrates a required convention.", prohibitedSignals: [], preferredSignals: [] },
+    { intent: "question-nonactionable", title: "Define notification ownership", rule: "Notification ownership between this factory and downstream services is not established and requires an architectural decision.", rationale: "The comment is a question and no accepted replacement demonstrates a required convention.", prohibitedSignals: [], preferredSignals: [] },
   ),
   row(
     { repository: "acme/web", pullRequest: 126, filePath: "src/cache/profile.ts", reviewComment: "How does this cache get invalidated?", rejectedCode: "profileCache.set(userId, profile)", acceptedCode: "" },
-    { intent: "question-nonactionable", title: "Question about cache invalidation", rule: "The reviewer is asking how cache invalidation works.", rationale: "The comment requests an explanation and supplies no accepted code change.", prohibitedSignals: [], preferredSignals: [] },
+    { intent: "question-nonactionable", title: "Define cache invalidation behavior", rule: "Cache invalidation behavior for this operation is not documented and must be defined before it can be enforced.", rationale: "The comment requests an explanation and supplies no accepted code change.", prohibitedSignals: [], preferredSignals: [] },
   ),
   row(
     { repository: "acme/platform", pullRequest: 61, filePath: "src/config/loader.ts", reviewComment: "Could you explain why this configuration is loaded twice?", rejectedCode: "loadConfig(); initialize(); loadConfig()", acceptedCode: "" },
-    { intent: "question-nonactionable", title: "Question about duplicate configuration loading", rule: "The reviewer is asking for an explanation of duplicate configuration loading.", rationale: "The evidence does not establish a requested or accepted engineering convention.", prohibitedSignals: [], preferredSignals: [] },
+    { intent: "question-nonactionable", title: "Define configuration loading policy", rule: "The repository must define whether duplicate configuration loading is intentional before enforcing a single-loading policy.", rationale: "The evidence does not establish a requested or accepted engineering convention.", prohibitedSignals: [], preferredSignals: [] },
   ),
 ];
 
@@ -189,7 +192,56 @@ const evaluation = [
   ),
   row(
     { repository: "acme/api", pullRequest: 325, filePath: "src/lib/retry.ts", reviewComment: "What happens when all retry attempts fail?", rejectedCode: "return retry(operation, 3)", acceptedCode: "" },
-    { intent: "question-nonactionable", title: "Question about exhausted retries", rule: "The reviewer is asking what happens after retry attempts are exhausted.", rationale: "The comment asks for clarification and provides no accepted implementation change.", prohibitedSignals: [], preferredSignals: [] },
+    { intent: "question-nonactionable", title: "Define exhausted-retry behavior", rule: "The repository must define the failure behavior after retry attempts are exhausted.", rationale: "The comment asks for clarification and provides no accepted implementation change.", prohibitedSignals: [], preferredSignals: [] },
+  ),
+];
+
+// Held-out cases intentionally vary domains, languages, and detection modes.
+// They are never included in training and prevent us from selecting a model
+// merely because it memorized the starter examples.
+const additionalEvaluation = [
+  row(
+    { repository: "acme/api", pullRequest: 501, filePath: "src/controllers/subscriptions.ts", reviewComment: "Controllers should not query the database client directly; delegate to the subscription service.", rejectedCode: "return db.subscription.findMany({ where: { userId } })", acceptedCode: "return subscriptionService.listForUser(userId)" },
+    { intent: "architecture", title: "Keep database access out of subscription controllers", rule: "Subscription controllers must delegate persistence to the subscription service.", rationale: "The accepted implementation replaces controller-level database access with a service call.", prohibitedSignals: ["db.subscription.findMany"], preferredSignals: ["subscriptionService.listForUser"] },
+    forbiddenDetection("A subscription controller queries the database client directly.", ["db.subscription.findMany"]),
+  ),
+  row(
+    { repository: "acme/platform", pullRequest: 502, filePath: "src/audit/login.ts", reviewComment: "Never include passwords in structured logs.", rejectedCode: "audit.info('login failed', { email, password })", acceptedCode: "audit.info('login failed', { email })" },
+    { intent: "security", title: "Do not log passwords", rule: "Passwords must never be included in structured log fields.", rationale: "The accepted log removes the password while preserving non-secret diagnostic context.", prohibitedSignals: ["password"], preferredSignals: [] },
+    forbiddenDetection("A password is included in a structured audit log.", ["password"], ["audit.info"]),
+  ),
+  row(
+    { repository: "acme/web", pullRequest: 503, filePath: "src/pages/Projects.tsx", reviewComment: "Use the project query hook instead of fetching server state in an effect.", rejectedCode: "useEffect(() => { fetch('/api/projects').then(loadProjects) }, [])", acceptedCode: "const projects = useProjectsQuery()" },
+    { intent: "architecture", title: "Use the project query hook", rule: "Project pages must use the repository query hook for server state.", rationale: "The accepted component replaces effect-based fetching with the project query hook.", prohibitedSignals: ["useEffect", "fetch"], preferredSignals: ["useProjectsQuery"] },
+    forbiddenDetection("A project page fetches server state inside useEffect.", ["useEffect", "fetch"]),
+  ),
+  row(
+    { repository: "acme/api", pullRequest: 504, filePath: "src/routes/documents.ts", reviewComment: "Document downloads must run the document-access middleware first.", rejectedCode: "router.get('/documents/:id', downloadDocument)", acceptedCode: "router.get('/documents/:id', requireDocumentAccess, downloadDocument)" },
+    { intent: "security", title: "Authorize document downloads", rule: "Document download routes must apply document-access authorization.", rationale: "The accepted route adds requireDocumentAccess before the download handler.", prohibitedSignals: [], preferredSignals: ["requireDocumentAccess"] },
+    requiredDetection("A document download route lacks document-access authorization.", ["downloadDocument"], ["requireDocumentAccess"]),
+  ),
+  row(
+    { repository: "acme/api", pullRequest: 505, filePath: "src/services/refunds.ts", reviewComment: "The refund and ledger writes must commit together.", rejectedCode: "await refunds.save(refund); await ledger.append(entry)", acceptedCode: "await database.transaction(async tx => { await refunds.save(refund, tx); await ledger.append(entry, tx) })" },
+    { intent: "architecture", title: "Make refund writes transactional", rule: "Refund and ledger writes must execute in one database transaction.", rationale: "The accepted implementation wraps both coupled writes in a shared transaction.", prohibitedSignals: [], preferredSignals: ["database.transaction"] },
+    requiredDetection("Coupled refund and ledger writes occur without a shared transaction.", ["refunds.save", "ledger.append"], ["database.transaction"], "file"),
+  ),
+  row(
+    { repository: "acme/platform", pullRequest: 506, filePath: "src/jobs/archive.ts", reviewComment: "Await the upload before reporting archive completion.", rejectedCode: "archiveStore.upload(bundle); return completed()", acceptedCode: "await archiveStore.upload(bundle); return completed()" },
+    { intent: "actionable-change", title: "Await archive uploads", rule: "Archive uploads must finish before the job reports completion.", rationale: "The accepted job awaits the upload before returning completion.", prohibitedSignals: [], preferredSignals: ["await archiveStore.upload"] },
+    requiredDetection("An archive upload is started without awaiting completion.", ["archiveStore.upload"], ["await archiveStore.upload"]),
+  ),
+  row(
+    { repository: "acme/web", pullRequest: 507, filePath: "src/components/Status.tsx", reviewComment: "Name this boolean like a predicate: `isReady`.", rejectedCode: "const ready = status === 'ready'", acceptedCode: "const isReady = status === 'ready'" },
+    { intent: "style", title: "Use predicate names for readiness booleans", rule: "Readiness booleans should use predicate-style names.", rationale: "The accepted code renames the boolean to isReady.", prohibitedSignals: ["ready"], preferredSignals: ["isReady"] },
+    semanticDetection("A readiness boolean does not use a predicate-style name."),
+  ),
+  row(
+    { repository: "acme/api", pullRequest: 508, filePath: "src/cache/catalog.ts", reviewComment: "How is the catalog cache invalidated after an import?", rejectedCode: "catalogCache.set(key, catalog)", acceptedCode: "" },
+    { intent: "question-nonactionable", title: "Define catalog cache invalidation", rule: "Catalog import cache invalidation behavior must be explicitly defined before it can be enforced.", rationale: "The comment asks for clarification and provides no accepted implementation change.", prohibitedSignals: [], preferredSignals: [] },
+  ),
+  row(
+    { repository: "acme/web", pullRequest: 509, filePath: "src/search/results.ts", reviewComment: "Should empty searches return everything, or should we document this behavior?", rejectedCode: "if (!query) return allResults", acceptedCode: "" },
+    { intent: "question-nonactionable", title: "Define empty-search behavior", rule: "The search API must explicitly define and document the result of an empty query.", rationale: "No accepted implementation establishes an executable repository convention.", prohibitedSignals: [], preferredSignals: [] },
   ),
 ];
 
@@ -277,10 +329,211 @@ const additionalExecutable = [
   ),
 ];
 
+function capitalize(value) {
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+}
+
+const dbDomains = [
+  "account", "address", "alert", "asset", "attachment", "booking", "cart", "category",
+  "comment", "coupon", "customer", "delivery", "device", "event", "export", "feed", "group",
+  "invoice", "item", "ledger", "membership", "message", "notification", "organization", "payment",
+  "plan", "profile", "receipt", "report", "role", "session", "shipment", "subscription", "team", "user",
+];
+const secrets = [
+  "accessToken", "apiKey", "authCode", "clientSecret", "cookieValue", "creditCard", "cvv",
+  "databasePassword", "encryptionKey", "jwt", "oauthToken", "oneTimeCode", "password", "passwordHash",
+  "privateKey", "recoveryCode", "refreshToken", "secretKey", "sessionSecret", "sessionToken",
+  "signingKey", "socialSecurityNumber", "temporaryPassword", "totpSecret", "webhookSecret",
+];
+const clientResources = [
+  "accounts", "alerts", "assets", "bookings", "categories", "comments", "coupons", "customers",
+  "deliveries", "devices", "events", "exports", "feeds", "groups", "invoices", "memberships",
+  "messages", "notifications", "payments", "shipments",
+];
+const sqlEntities = [
+  "accounts", "audit_logs", "bookings", "comments", "customers", "devices", "events", "invoices",
+  "memberships", "messages", "notifications", "payments", "receipts", "sessions", "shipments",
+];
+const runtimes = ["node", "python", "golang", "ruby", "php", "postgres", "redis", "nginx", "alpine", "ubuntu"];
+
+const forbiddenCurriculum = [
+  ...dbDomains.map((domain, index) => row(
+    { repository: `curriculum/service-${index % 7}`, pullRequest: 1000 + index, filePath: `src/controllers/${domain}.ts`, reviewComment: `${capitalize(domain)} controllers must delegate persistence to the service layer.`, rejectedCode: `return prisma.${domain}.findMany({ where: filter })`, acceptedCode: `return ${domain}Service.list(filter)` },
+    { intent: "architecture", title: `Keep Prisma out of ${domain} controllers`, rule: `${capitalize(domain)} controllers must delegate persistence to services.`, rationale: `The accepted implementation replaces controller-level Prisma access with the ${domain} service.`, prohibitedSignals: [`prisma.${domain}.findMany`], preferredSignals: [`${domain}Service.list`] },
+    forbiddenDetection(`A ${domain} controller accesses Prisma directly.`, [`prisma.${domain}.findMany`]),
+  )),
+  ...secrets.map((secret, index) => row(
+    { repository: `curriculum/platform-${index % 5}`, pullRequest: 1100 + index, filePath: `src/logging/event-${index}.ts`, reviewComment: `Do not include ${secret} in structured logs.`, rejectedCode: `logger.warn('operation failed', { requestId, ${secret} })`, acceptedCode: "logger.warn('operation failed', { requestId })" },
+    { intent: "security", title: `Do not log ${secret}`, rule: `${capitalize(secret)} values must not be written to structured logs.`, rationale: `The accepted log preserves its request identifier while removing ${secret}.`, prohibitedSignals: [secret], preferredSignals: [] },
+    forbiddenDetection(`A structured log contains ${secret}.`, [secret], ["logger.warn"]),
+  )),
+  ...clientResources.map((resource, index) => row(
+    { repository: `curriculum/web-${index % 4}`, pullRequest: 1200 + index, filePath: `src/pages/${capitalize(resource)}.tsx`, reviewComment: `Use the ${resource} query hook instead of fetching server state in an effect.`, rejectedCode: `useEffect(() => { fetch('/api/${resource}').then(load${capitalize(resource)}) }, [])`, acceptedCode: `const query = use${capitalize(resource)}Query()` },
+    { intent: "architecture", title: `Use the ${resource} query hook`, rule: `${capitalize(resource)} pages must use the repository query hook for server state.`, rationale: `The accepted component replaces effect-based fetching with use${capitalize(resource)}Query.`, prohibitedSignals: ["useEffect", "fetch"], preferredSignals: [`use${capitalize(resource)}Query`] },
+    forbiddenDetection(`A ${resource} page fetches server state inside useEffect.`, ["useEffect", "fetch"]),
+  )),
+  ...sqlEntities.map((entity, index) => row(
+    { repository: `curriculum/python-${index % 3}`, pullRequest: 1300 + index, filePath: `repositories/${entity}.py`, reviewComment: "Bind query parameters instead of concatenating user input.", rejectedCode: `cursor.execute("SELECT * FROM ${entity} WHERE id=" + record_id)`, acceptedCode: `cursor.execute("SELECT * FROM ${entity} WHERE id=%s", (record_id,))` },
+    { intent: "security", title: `Parameterize ${entity} queries`, rule: `${capitalize(entity)} queries must bind user-provided parameters.`, rationale: "The accepted query passes the identifier as a bound parameter.", prohibitedSignals: ["+ record_id"], preferredSignals: ["%s"] },
+    forbiddenDetection("A SQL query concatenates a record identifier.", ["+ record_id"], ["cursor.execute"]),
+  )),
+  ...runtimes.map((runtime, index) => row(
+    { repository: `curriculum/runtime-${index % 3}`, pullRequest: 1400 + index, filePath: "Dockerfile", reviewComment: `Pin the ${runtime} image instead of using latest.`, rejectedCode: `FROM ${runtime}:latest`, acceptedCode: `FROM ${runtime}:3.2` },
+    { intent: "architecture", title: `Pin the ${runtime} image`, rule: `${capitalize(runtime)} container images must use an explicit version.`, rationale: "The accepted Dockerfile replaces the floating latest tag with an explicit version.", prohibitedSignals: [`${runtime}:latest`], preferredSignals: [`${runtime}:3.2`] },
+    forbiddenDetection(`A ${runtime} image uses the floating latest tag.`, [`${runtime}:latest`]),
+  )),
+].slice(0, 105);
+
+const routeResources = [
+  "accounts", "alerts", "assets", "bookings", "carts", "categories", "comments", "coupons",
+  "customers", "deliveries", "devices", "events", "exports", "feeds", "groups", "invoices",
+  "items", "memberships", "messages", "notifications", "payments", "profiles", "receipts", "shipments", "teams",
+];
+const featureResources = [
+  "analytics", "audit", "billing", "calendar", "checkout", "collaboration", "coupons", "delivery",
+  "exports", "feeds", "invoices", "messaging", "notifications", "payments", "receipts", "recommendations",
+  "scheduling", "shipments", "subscriptions", "teams",
+];
+const transactionDomains = [
+  ["booking", "inventory"], ["charge", "receipt"], ["coupon", "redemption"], ["credit", "balance"],
+  ["delivery", "status"], ["event", "audit"], ["invoice", "ledger"], ["membership", "seat"],
+  ["message", "outbox"], ["order", "inventory"], ["payment", "ledger"], ["payout", "balance"],
+  ["profile", "audit"], ["receipt", "email"], ["reservation", "capacity"], ["shipment", "inventory"],
+  ["subscription", "invoice"], ["team", "membership"], ["transfer", "ledger"], ["user", "organization"],
+];
+const asyncOperations = [
+  "auditStore.append", "backupStore.upload", "cache.persist", "catalog.publish", "deliveryQueue.enqueue",
+  "emailQueue.send", "eventBus.publish", "exportStore.write", "feedStore.refresh", "fileStore.upload",
+  "indexer.commit", "invoiceStore.save", "ledgerStore.append", "messageQueue.enqueue", "metrics.flush",
+  "notificationQueue.send", "outbox.flush", "paymentStore.capture", "receiptStore.save", "shipmentStore.update",
+];
+const testComponents = ["AccountPanel", "AlertList", "BookingForm", "Cart", "Checkout", "CustomerCard", "Invoice", "MessageList", "PaymentForm", "ShipmentTracker"];
+const csrfHandlers = ["changeEmail", "createAddress", "deleteAccount", "disableDevice", "inviteMember", "removeMember", "resetPassword", "savePreferences", "updateBilling", "updateProfile"];
+
+const requiredCurriculum = [
+  ...routeResources.map((resource, index) => {
+    const handler = `get${capitalize(resource)}`;
+    return row(
+      { repository: `curriculum/api-${index % 6}`, pullRequest: 2000 + index, filePath: `src/routes/${resource}.ts`, reviewComment: `${capitalize(resource)} endpoints require authentication.`, rejectedCode: `router.get('/${resource}', ${handler})`, acceptedCode: `router.get('/${resource}', requireAuth, ${handler})` },
+      { intent: "security", title: `Authenticate ${resource} endpoints`, rule: `${capitalize(resource)} endpoints must apply authentication middleware.`, rationale: "The accepted route adds requireAuth before the handler.", prohibitedSignals: [], preferredSignals: ["requireAuth"] },
+      requiredDetection(`A ${resource} endpoint lacks authentication.`, [handler], ["requireAuth"]),
+    );
+  }),
+  ...featureResources.map((resource, index) => {
+    const handler = `open${capitalize(resource)}`;
+    return row(
+      { repository: `curriculum/api-${index % 6}`, pullRequest: 2100 + index, filePath: `src/routes/${resource}.ts`, reviewComment: `Gate the new ${resource} route behind its feature flag.`, rejectedCode: `router.post('/${resource}', ${handler})`, acceptedCode: `router.post('/${resource}', requireFeature('${resource}'), ${handler})` },
+      { intent: "architecture", title: `Feature-flag ${resource} routes`, rule: `New ${resource} routes must apply their feature gate.`, rationale: "The accepted route adds requireFeature before the handler.", prohibitedSignals: [], preferredSignals: ["requireFeature"] },
+      requiredDetection(`A ${resource} route lacks its feature gate.`, [handler], ["requireFeature"]),
+    );
+  }),
+  ...transactionDomains.map(([left, right], index) => row(
+    { repository: `curriculum/service-${index % 5}`, pullRequest: 2200 + index, filePath: `src/services/${left}.ts`, reviewComment: `The ${left} and ${right} writes must commit together.`, rejectedCode: `await ${left}Store.save(value); await ${right}Store.save(value)`, acceptedCode: `await database.transaction(async tx => { await ${left}Store.save(value, tx); await ${right}Store.save(value, tx) })` },
+    { intent: "architecture", title: `Make ${left} writes transactional`, rule: `${capitalize(left)} and ${right} writes must execute in one transaction.`, rationale: "The accepted implementation wraps the coupled writes in database.transaction.", prohibitedSignals: [], preferredSignals: ["database.transaction"] },
+    requiredDetection(`Coupled ${left} and ${right} writes occur without a transaction.`, [`${left}Store.save`, `${right}Store.save`], ["database.transaction"], "file"),
+  )),
+  ...asyncOperations.map((operation, index) => row(
+    { repository: `curriculum/jobs-${index % 4}`, pullRequest: 2300 + index, filePath: `src/jobs/task-${index}.ts`, reviewComment: `Await ${operation} before reporting completion.`, rejectedCode: `${operation}(result); return completed()`, acceptedCode: `await ${operation}(result); return completed()` },
+    { intent: "actionable-change", title: `Await ${operation}`, rule: `${operation} must finish before the job reports completion.`, rationale: "The accepted job awaits the asynchronous operation before returning.", prohibitedSignals: [], preferredSignals: [`await ${operation}`] },
+    requiredDetection(`A job starts ${operation} without awaiting it.`, [operation], [`await ${operation}`]),
+  )),
+  ...testComponents.map((component, index) => row(
+    { repository: `curriculum/web-${index % 3}`, pullRequest: 2400 + index, filePath: `src/components/${component}.test.tsx`, reviewComment: "Install the GraphQL mock before rendering this component.", rejectedCode: `render(<${component} />)`, acceptedCode: `server.use(graphql.query('${component}', handler)); render(<${component} />)` },
+    { intent: "testing", title: `Mock ${component} GraphQL requests`, rule: `${component} tests must install their GraphQL handler before rendering.`, rationale: "The accepted test installs the network handler before rendering.", prohibitedSignals: [], preferredSignals: ["server.use"] },
+    requiredDetection(`A ${component} test renders without its GraphQL mock.`, [`render(<${component}`], ["server.use"], "file"),
+  )),
+  ...csrfHandlers.map((handler, index) => row(
+    { repository: `curriculum/web-${index % 3}`, pullRequest: 2500 + index, filePath: `src/routes/action-${index}.ts`, reviewComment: "State-changing browser routes require CSRF verification.", rejectedCode: `router.post('/action-${index}', ${handler})`, acceptedCode: `router.post('/action-${index}', verifyCsrf, ${handler})` },
+    { intent: "security", title: `Protect ${handler} from CSRF`, rule: `Routes invoking ${handler} must verify CSRF tokens.`, rationale: "The accepted route adds verifyCsrf before the state-changing handler.", prohibitedSignals: [], preferredSignals: ["verifyCsrf"] },
+    requiredDetection(`A state-changing ${handler} route lacks CSRF verification.`, [handler], ["verifyCsrf"]),
+  )),
+].slice(0, 105);
+
+const questionTopics = [
+  "account deletion", "alert delivery", "audit retention", "backup recovery", "booking expiry",
+  "cache eviction", "calendar synchronization", "cart abandonment", "catalog refresh", "comment moderation",
+  "coupon expiration", "customer merging", "data residency", "delivery retries", "device revocation",
+  "email suppression", "event ordering", "export cleanup", "feed pagination", "file deduplication",
+  "group ownership", "import rollback", "invoice numbering", "job cancellation", "ledger reconciliation",
+  "membership expiry", "message ordering", "notification batching", "organization deletion", "payment reversal",
+  "permission inheritance", "profile visibility", "rate-limit reset", "receipt delivery", "record archival",
+  "retry exhaustion", "role propagation", "search ranking", "session expiration", "shipment cancellation",
+  "subscription renewal", "team deletion", "tenant migration", "token rotation", "transaction recovery",
+  "upload cleanup", "user anonymization", "webhook replay", "worker shutdown", "workflow cancellation",
+];
+const booleanNames = ["active", "available", "complete", "connected", "disabled", "editable", "empty", "enabled", "expired", "focused", "hidden", "invalid", "locked", "open", "pending", "selected", "successful", "synced", "valid", "visible"];
+const helperDomains = ["currency", "date", "duration", "email", "filename", "locale", "money", "percentage", "phone", "postalCode", "quantity", "relativeTime", "slug", "timezone", "url"];
+const responsibilityDomains = ["audit", "billing", "caching", "delivery", "email", "exports", "imports", "invoicing", "logging", "messaging", "notifications", "payments", "permissions", "reporting", "search", "shipping", "subscriptions", "telemetry", "validation", "webhooks"];
+
+const semanticCurriculum = [
+  ...questionTopics.map((topic, index) => row(
+    { repository: `curriculum/discussion-${index % 5}`, pullRequest: 3000 + index, filePath: `src/domain/topic-${index}.ts`, reviewComment: `How does ${topic} behave when the operation is interrupted?`, rejectedCode: `return handleOperation(state)`, acceptedCode: "" },
+    { intent: "question-nonactionable", title: `Define interrupted ${topic} behavior`, rule: `The repository has not established how ${topic} behaves when interrupted; an explicit product decision is required before enforcement.`, rationale: "The comment is a question and no accepted change establishes an executable convention.", prohibitedSignals: [], preferredSignals: [] },
+    semanticDetection(`The review asks for clarification about ${topic}.`),
+  )),
+  ...booleanNames.map((name, index) => row(
+    { repository: `curriculum/style-${index % 4}`, pullRequest: 3100 + index, filePath: `src/state/value-${index}.ts`, reviewComment: `Rename this boolean so it reads as a predicate.`, rejectedCode: `const ${name} = status === '${name}'`, acceptedCode: `const is${capitalize(name)} = status === '${name}'` },
+    { intent: "style", title: `Use a predicate name for ${name}`, rule: `The ${name} boolean should use a predicate-style name.`, rationale: `The accepted code renames ${name} to is${capitalize(name)}.`, prohibitedSignals: [name], preferredSignals: [`is${capitalize(name)}`] },
+    semanticDetection(`A ${name} boolean does not use a predicate-style name.`),
+  )),
+  ...helperDomains.map((domain, index) => row(
+    { repository: `curriculum/style-${index % 4}`, pullRequest: 3200 + index, filePath: `src/format/value-${index}.ts`, reviewComment: `Use the shared ${domain} formatter here.`, rejectedCode: `const value = locallyFormat${capitalize(domain)}(input)`, acceptedCode: `const value = format${capitalize(domain)}(input)` },
+    { intent: "style", title: `Use the shared ${domain} formatter`, rule: `${capitalize(domain)} values should use the repository's shared formatter.`, rationale: "The accepted code uses the shared helper, but the repository-wide condition is best represented semantically.", prohibitedSignals: [`locallyFormat${capitalize(domain)}`], preferredSignals: [`format${capitalize(domain)}`] },
+    semanticDetection(`A ${domain} value bypasses the shared formatter.`),
+  )),
+  ...responsibilityDomains.map((domain, index) => row(
+    { repository: `curriculum/design-${index % 4}`, pullRequest: 3300 + index, filePath: `src/factories/value-${index}.ts`, reviewComment: `Is this factory really the right owner for ${domain}?`, rejectedCode: `await ${domain}Coordinator.run(value)`, acceptedCode: "" },
+    { intent: "question-nonactionable", title: `Define ${domain} responsibility`, rule: `Ownership of ${domain} between the factory and coordinator is not established and requires an explicit architectural decision.`, rationale: "The comment raises an architectural question without an accepted replacement.", prohibitedSignals: [], preferredSignals: [] },
+    semanticDetection(`The review questions ownership of ${domain}.`),
+  )),
+].slice(0, 105);
+
+const curriculumRows = [...forbiddenCurriculum, ...requiredCurriculum, ...semanticCurriculum];
+
 const realEpisodes = JSON.parse(await readFile(resolve(root, "packages/api-server/data/episodes.json"), "utf8"));
 const eligibleRealEpisodes = realEpisodes
   .filter((episode) => episode.acceptedFixQuality === "medium" && episode.reviewComment && episode.rejectedCode)
   .sort((left, right) => left.id.localeCompare(right.id));
+
+function contextualRuleFromEpisode(episode) {
+  const comment = episode.reviewComment.toLowerCase();
+  const known = [
+    [/no-store.*health endpoints|cache policy live on api routes/, "Cache-control policy must be explicitly scoped so global defaults do not unintentionally affect health endpoints."],
+    [/strictness setting.*boundary parsing|unchecked request data/, "Request boundaries must parse untrusted data instead of bypassing strict typing with unchecked assertions."],
+    [/documented meaning.*severity|interpretations of sev1/, "Incident severity levels must have documented meanings shared by the API and its clients."],
+    [/responder notes count as incident updates|sorting purposes/, "The incident domain must define and test whether responder notes update incident recency and sorting."],
+    [/minimum supported node version|fastify.*node version/, "The project must document and enforce the minimum Node.js version required by its Fastify release."],
+    [/assignment.*first milestone|incident commander.*initial workflow/, "The initial incident workflow must explicitly define whether responder assignment is supported or only an incident commander."],
+    [/id generation.*injected|deterministic ids/, "Incident services should accept an injectable ID generator so tests can use deterministic identifiers."],
+    [/location.*new incident resource|returning 201/, "HTTP 201 responses for newly created incidents should include a Location header identifying the new resource."],
+    [/incidentnotfounderror|domain-specific.*notfound/, "Missing incidents must be represented by a typed domain error rather than message text consumed by the HTTP layer."],
+    [/transition-specific endpoint|patch preferred/, "The incident API must explicitly choose and consistently document how lifecycle transitions are represented for clients."],
+    [/example health-check request|local server started/, "Contributor setup documentation should include a health-check request that verifies the local server is ready."],
+    [/configuration test.*non-numeric|non-numeric values/, "Configuration parsing tests must cover non-numeric values and preserve understandable startup failures."],
+    [/resolved incidents still accept notes|active-state rule/, "The incident-note API must explicitly define and enforce whether resolved incidents may accept post-incident notes."],
+    [/pinning.*digest/, "Production container images should use immutable digest pins that dependency automation can update."],
+    [/lockfile.*npm ci|npm ci.*lockfile/, "Projects that install dependencies with `npm ci` must commit and maintain a lockfile."],
+    [/development dependencies.*production/, "Production container images must exclude development-only dependencies."],
+    [/fresh instance.*beforeeach|closed after the first test/, "Tests that close application instances must create a fresh instance for each test."],
+    [/content type.*request-id/, "Health endpoint tests must assert response content type and request-ID headers."],
+    [/returned incident fields|input preservation/, "Creation tests should assert that returned domain fields preserve requested inputs."],
+    [/createdat.*updatedat/, "Creation tests must verify that `createdAt` and `updatedAt` begin equal."],
+    [/unknown id.*domain error/, "Domain-service tests must assert the typed error returned for unknown identifiers."],
+    [/incident factory|named builder/, "Complex test fixtures should use named builders with sensible defaults."],
+    [/clear test.*empty store/, "Store-clearing tests must seed data before invoking `clear`."],
+    [/configuration failures.*fatal/, "Startup configuration failures must be logged as concise fatal events before exit."],
+    [/second signal.*close/, "Graceful shutdown handlers must prevent duplicate work while shutdown is already in progress."],
+    [/startup errors.*caught|address-in-use/, "Application startup must catch and log operational failures before exiting."],
+    [/onsend.*error response/, "Request-context tests must verify headers on every error path affected by response hooks."],
+    [/trusted incoming request id/, "Request IDs must come from a bounded trusted source or be generated by the service."],
+    [/no-store globally/, "Cache-control policy should be scoped to routes whose responses must not be cached."],
+    [/zod paths.*field names/, "Public validation errors must expose stable field names rather than library-specific path structures."],
+    [/matching error text is brittle|typed not-found error/, "Domain failures must use typed errors instead of message-text matching."],
+  ];
+  const match = known.find(([pattern]) => pattern.test(comment));
+  if (match) return match[1];
+  throw new Error(`Real episode ${episode.id} needs a human-curated contextual rule before training`);
+}
 
 function semanticOnlyRealRow(episode) {
   const input = {
@@ -293,7 +546,10 @@ function semanticOnlyRealRow(episode) {
     ...(episode.codeContext ? { codeContext: episode.codeContext } : {}),
   };
   const semantic = episode.semanticAnalysis ?? {};
-  const title = String(semantic.title || episode.reviewComment.split(/[.!?]/)[0] || "Repository review guidance").slice(0, 100);
+  const rule = contextualRuleFromEpisode(episode);
+  const title = rule.split(/[.!?]/)[0].slice(0, 100);
+  const unresolvedDecision = /no-store.*health endpoints|responder notes count as incident updates|assignment.*first milestone|transition-specific endpoint|resolved incidents still accept notes|trusted incoming request id/i
+    .test(episode.reviewComment);
   return {
     input: JSON.stringify({
       task: "analyze_review_episode",
@@ -302,19 +558,97 @@ function semanticOnlyRealRow(episode) {
       episode: input,
     }),
     output: JSON.stringify({
-      intent: semantic.intent || episode.intent || "actionable-change",
+      intent: unresolvedDecision ? "question-nonactionable" : semantic.intent || episode.intent || "actionable-change",
       title,
-      rule: semantic.rule || episode.reviewComment,
+      rule,
       rationale: "The linked merged code does not isolate a safe exact signal, so this review remains semantic-only.",
-      detection: semanticDetection(semantic.rule || episode.reviewComment),
+      detection: semanticDetection(rule),
     }),
   };
 }
 
 const realTraining = eligibleRealEpisodes.slice(0, 10).map(semanticOnlyRealRow);
-const realEvaluation = eligibleRealEpisodes.slice(10, 20).map(semanticOnlyRealRow);
-const completeTraining = [...train, ...additionalExecutable, ...realTraining];
-const completeEvaluation = [...evaluation, ...realEvaluation];
+function evaluationConceptsFromEpisode(episode) {
+  const comment = episode.reviewComment.toLowerCase();
+  const concepts = [
+    [/location.*returning 201/, ["location", "201|created", "resource|incident"]],
+    [/incidentnotfounderror|domain-specific.*wording/, ["typed|domain", "error", "message|http"]],
+    [/transition-specific endpoint|patch preferred/, ["transition|lifecycle", "api|endpoint|patch", "define|choose|document"]],
+    [/example health-check request/, ["document|setup|contributor", "health", "request|example"]],
+    [/configuration test.*non-numeric/, ["configuration", "non-numeric|numeric", "test|failure"]],
+    [/input preservation|requested title and severity/, ["test", "title", "severity"]],
+    [/content type.*request-id/, ["health", "content", "request-id|request id"]],
+    [/resolved incidents still accept notes/, ["resolved", "notes", "define|enforce|allow|accept"]],
+    [/lockfile.*npm ci|npm ci.*lockfile/, ["lockfile", "npm ci"]],
+    [/trusted incoming request id/, ["request id|request correlation", "trusted|generated|service"]],
+  ].find(([pattern]) => pattern.test(comment));
+  if (!concepts) throw new Error(`Real evaluation episode ${episode.id} needs curated evaluation concepts`);
+  return concepts[1];
+}
+
+const realEvaluation = eligibleRealEpisodes.slice(10, 20).map((episode) => ({
+  ...semanticOnlyRealRow(episode),
+  evaluationConcepts: evaluationConceptsFromEpisode(episode),
+}));
+const baseTraining = [...train, ...additionalExecutable, ...realTraining, ...curriculumRows];
+
+function conversationalVariant(item, index, variant) {
+  const input = JSON.parse(item.input);
+  const output = JSON.parse(item.output);
+  const episode = input.episode;
+  const title = output.title.replace(/[.!?]+$/, "").toLowerCase();
+  const reviewComment = variant === 0
+    ? `Could we align this with the repository's ${title} convention? The current version feels inconsistent with nearby code.`
+    : `This looks like the same issue we handled elsewhere. Please apply the established ${title} approach here.`;
+  return {
+    input: JSON.stringify({
+      ...input,
+      episode: {
+        ...episode,
+        repository: `contextual/${output.detection.mode}-${index % 9}`,
+        pullRequest: 10_000 + index * 2 + variant,
+        reviewComment,
+      },
+    }),
+    output: item.output,
+  };
+}
+
+const contextualTraining = ["forbidden-signal", "missing-required-signal", "semantic"].flatMap((mode) => {
+  const rows = baseTraining.filter((item) => JSON.parse(item.output).detection.mode === mode);
+  return [
+    ...rows.map((item, index) => conversationalVariant(item, index, 0)),
+    ...rows.slice(0, 60).map((item, index) => conversationalVariant(item, index, 1)),
+  ];
+});
+
+const completeTraining = [...baseTraining, ...contextualTraining];
+const completeEvaluation = [...evaluation, ...additionalEvaluation, ...realEvaluation];
+
+const modeCounts = completeTraining.reduce((counts, item) => {
+  const mode = JSON.parse(item.output).detection.mode;
+  counts[mode] = (counts[mode] ?? 0) + 1;
+  return counts;
+}, {});
+if (completeTraining.length !== 900 || Object.values(modeCounts).some((count) => count !== 300)) {
+  throw new Error(`Training set must contain 900 balanced rows; got ${JSON.stringify(modeCounts)}`);
+}
+if (new Set(completeTraining.map((item) => item.input)).size !== completeTraining.length) {
+  throw new Error("Training set contains duplicate inputs");
+}
+
+function assertContextualRuleTargets(rows, label) {
+  rows.forEach((item, index) => {
+    const { rule } = JSON.parse(item.output);
+    if (!rule || /should would|the reviewer|this comment|this pr|code in this repository area/i.test(rule)
+      || /[?]\s*$/.test(rule)) {
+      throw new Error(`${label} row ${index} has a review-dependent or non-declarative rule: ${JSON.stringify(rule)}`);
+    }
+  });
+}
+
+assertContextualRuleTargets(completeTraining, "Training");
+assertContextualRuleTargets(completeEvaluation, "Evaluation");
 
 await mkdir(outputDirectory, { recursive: true });
 await Promise.all([
@@ -322,4 +656,4 @@ await Promise.all([
   writeFile(resolve(outputDirectory, "eval.jsonl"), `${completeEvaluation.map(JSON.stringify).join("\n")}\n`, "utf8"),
 ]);
 
-process.stderr.write(`Wrote ${completeTraining.length} training rows (${realTraining.length} real semantic-only) and ${completeEvaluation.length} evaluation rows (${realEvaluation.length} real semantic-only) to ${outputDirectory}\n`);
+process.stderr.write(`Wrote ${completeTraining.length} balanced training rows ${JSON.stringify(modeCounts)} and ${completeEvaluation.length} evaluation rows (${realEvaluation.length} real semantic-only) to ${outputDirectory}\n`);

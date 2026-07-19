@@ -1,5 +1,6 @@
 import type { CommentIntent, ConventionDetection } from "@ht6/shared";
 import type { SemanticAnalysis, SemanticInput } from "./types.js";
+import { isNearVerbatimRule, synthesizeContextualRule } from "./ruleSynthesis.js";
 
 const LEGACY_TOP_LEVEL_KEYS = [
   "intent", "title", "rule", "rationale", "prohibitedSignals", "preferredSignals", "detection",
@@ -195,10 +196,19 @@ export function parseSemanticAnalysis(responseText: string, input: SemanticInput
     assertSignalsGrounded(detection.requiredSignals, acceptedEvidence, "detection.requiredSignals");
   }
 
+  const suppliedRule = requiredString(parsed.rule, "rule");
+  const rule = isNearVerbatimRule(suppliedRule, input.reviewComment)
+    ? synthesizeContextualRule(input)
+    : suppliedRule;
+  const suppliedTitle = requiredString(parsed.title, "title");
+  const title = isNearVerbatimRule(suppliedTitle, input.reviewComment)
+    ? rule.split(/[.!?\n]/)[0].slice(0, 100)
+    : suppliedTitle;
+
   return {
     intent: intent as CommentIntent,
-    title: requiredString(parsed.title, "title"),
-    rule: requiredString(parsed.rule, "rule"),
+    title,
+    rule,
     rationale: requiredString(parsed.rationale, "rationale"),
     prohibitedSignals,
     preferredSignals,

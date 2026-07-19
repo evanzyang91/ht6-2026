@@ -87,6 +87,11 @@ users should connect to that service; they should not receive or manually config
 Each episode stores the semantic snapshot and analyzer provider/version so conventions can be
 rebuilt and audited without calling the provider again.
 
+Convention confidence is not returned by Freesolo. The compiler calculates it from independent
+evidence dimensions: distinct supporting pull requests, accepted-fix linkage quality, accepted-fix
+coverage, and whether the convention has grounded executable detection. Re-run extraction after
+changing this formula; already-persisted conventions retain their previous scores until rebuilt.
+
 ## Success criterion
 
 At least three `Convention`s each supported by multiple real PRs

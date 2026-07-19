@@ -101,6 +101,17 @@ describe("semantic response validation", () => {
       detection: { mode: "semantic" },
     });
   });
+
+  it("repairs a copied review comment into context-complete repository knowledge", () => {
+    const copied = structuredClone(validAnalysis);
+    copied.title = input.reviewComment;
+    copied.rule = input.reviewComment;
+    const parsed = parseSemanticAnalysis(JSON.stringify(copied), input);
+    expect(parsed.rule).not.toBe(input.reviewComment);
+    expect(parsed.rule).toContain("Routes");
+    expect(parsed.rule).toContain("requireFeature");
+    expect(parsed.title).not.toBe(input.reviewComment);
+  });
 });
 
 describe("FreesoloSemanticAnalyzer", () => {
