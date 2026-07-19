@@ -101,6 +101,8 @@ class MemoryController implements vscode.Disposable {
   private commitWatchers: vscode.Disposable[] = [];
   private autoIngestTimer: NodeJS.Timeout | undefined;
   private autoIngestRunning = false;
+  private manualSyncRunning = false;
+  private readonly refreshes = new Map<string, Promise<{ commentCount: number }>>();
   private lastSyncAt: number | undefined;
   private lastSyncCommentCount: number | undefined;
   private readonly statusEmitter = new vscode.EventEmitter<void>();
@@ -355,9 +357,14 @@ class MemoryController implements vscode.Disposable {
 
   /** Explicit "Sync Now" action for the sidebar — unlike the silent timer, this may prompt a GitHub sign-in. */
   async syncNow(): Promise<void> {
+    // Webview messages can arrive more than once before its HTML is refreshed. Treat repeated
+    // clicks as one operation so they cannot start overlapping API mutations and status refreshes.
+    if (this.manualSyncRunning) return;
+    this.manualSyncRunning = true;
     const folder = this.commandFolder();
     if (!folder || !vscode.workspace.isTrusted) {
       await vscode.window.showInformationMessage("Open and trust a Git repository before syncing Engineering Memory.");
+      this.manualSyncRunning = false;
       return;
     }
     try {
@@ -369,13 +376,30 @@ class MemoryController implements vscode.Disposable {
     } catch (error) {
       this.reportError(error);
     } finally {
+      this.manualSyncRunning = false;
       this.statusEmitter.fire();
     }
   }
 
   private async runRefresh(context: WorkspaceContext, session: vscode.AuthenticationSession): Promise<void> {
     const limit = this.configuration().get("historyLimit", 75);
-    const result = await refreshMemory(context.repository, session.accessToken, context.dataDirectory, limit, context.apiUrl);
+    let refresh = this.refreshes.get(context.repository);
+    if (!refresh) {
+      refresh = refreshMemory(
+        context.repository,
+        session.accessToken,
+        context.dataDirectory,
+        limit,
+        context.apiUrl,
+      );
+      this.refreshes.set(context.repository, refresh);
+    }
+    let result: { commentCount: number };
+    try {
+      result = await refresh;
+    } finally {
+      if (this.refreshes.get(context.repository) === refresh) this.refreshes.delete(context.repository);
+    }
     this.lastSyncAt = Date.now();
     this.lastSyncCommentCount = result.commentCount;
     this.output.appendLine(
@@ -431,7 +455,10 @@ class MemoryController implements vscode.Disposable {
 
   private commandFolder(): vscode.WorkspaceFolder | undefined {
     const document = vscode.window.activeTextEditor?.document;
-    return document ? vscode.workspace.getWorkspaceFolder(document.uri) : vscode.workspace.workspaceFolders?.[0];
+    // Output/log editors can temporarily become active while a command is running. They are not
+    // in a workspace, so fall back to the open workspace instead of rendering "No folder open".
+    return (document ? vscode.workspace.getWorkspaceFolder(document.uri) : undefined)
+      ?? vscode.workspace.workspaceFolders?.[0];
   }
 
   private async validateDocument(document: vscode.TextDocument): Promise<void> {

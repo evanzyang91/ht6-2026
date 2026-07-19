@@ -41,3 +41,32 @@ it("requests an ingest-only refresh through GraphQL", async () => {
   const client = new EngineeringMemoryGraphqlClient("http://localhost:8790/graphql", "github-token");
   await expect(client.refresh("acme/api", 25)).resolves.toEqual({ repository: "acme/api", commentCount: 4 });
 });
+
+it("falls back to the full sync mutation when the API predates ingest-only refresh", async () => {
+  const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+    const request = JSON.parse(String(init.body)) as { query: string };
+    if (request.query.includes("requestRepositoryRefresh")) {
+      return new Response(JSON.stringify({
+        errors: [{
+          message: 'Cannot query field "requestRepositoryRefresh" on type "Mutation". Did you mean "requestRepositorySync"?',
+        }],
+      }), { headers: { "content-type": "application/json" } });
+    }
+    expect(request.query).toContain("requestRepositorySync");
+    return new Response(JSON.stringify({
+      data: {
+        requestRepositorySync: {
+          repository: "acme/api",
+          commentCount: 6,
+          episodeCount: 5,
+          conventionCount: 2,
+        },
+      },
+    }), { headers: { "content-type": "application/json" } });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  const client = new EngineeringMemoryGraphqlClient("http://localhost:8790/graphql", "github-token");
+  await expect(client.refresh("acme/api", 25)).resolves.toEqual({ repository: "acme/api", commentCount: 6 });
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});

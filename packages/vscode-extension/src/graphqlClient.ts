@@ -85,13 +85,22 @@ export class EngineeringMemoryGraphqlClient {
   }
 
   async refresh(repository: string, limit: number): Promise<{ repository: string; commentCount: number }> {
-    const data = await this.request<{ requestRepositoryRefresh: { repository: string; commentCount: number } }>(`
-      mutation RequestRepositoryRefresh($repository: String!, $limit: Int) {
-        requestRepositoryRefresh(repository: $repository, limit: $limit) {
-          repository commentCount
+    try {
+      const data = await this.request<{ requestRepositoryRefresh: { repository: string; commentCount: number } }>(`
+        mutation RequestRepositoryRefresh($repository: String!, $limit: Int) {
+          requestRepositoryRefresh(repository: $repository, limit: $limit) {
+            repository commentCount
+          }
         }
-      }
-    `, { repository, limit });
-    return data.requestRepositoryRefresh;
+      `, { repository, limit });
+      return data.requestRepositoryRefresh;
+    } catch (error) {
+      // Older deployed API versions only expose the full sync mutation. Keep the extension
+      // compatible while those deployments roll forward instead of making Sync Now unusable.
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes('Cannot query field "requestRepositoryRefresh"')) throw error;
+      const result = await this.sync(repository, limit);
+      return { repository: result.repository, commentCount: result.commentCount };
+    }
   }
 }
