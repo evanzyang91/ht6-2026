@@ -52,6 +52,24 @@
         "title": "Engineering Memory: Mute Convention"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "engineeringMemory",
+          "title": "Engineering Memory",
+          "icon": "resources/sidebar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "engineeringMemory": [
+        {
+          "type": "webview",
+          "id": "engineeringMemory.sidebar",
+          "name": "Status"
+        }
+      ]
+    },
     "configuration": {
       "title": "Engineering Memory",
       "properties": {

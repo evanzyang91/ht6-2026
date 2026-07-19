@@ -26,3 +26,18 @@ it("surfaces GraphQL errors", async () => {
   const client = new EngineeringMemoryGraphqlClient("http://localhost:8790/graphql", "bad-token");
   await expect(client.inspect("acme/private")).rejects.toThrow("Repository access denied");
 });
+
+it("requests an ingest-only refresh through GraphQL", async () => {
+  const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+    const request = JSON.parse(String(init.body)) as { query: string; variables: { repository: string; limit: number } };
+    expect(request.query).toContain("requestRepositoryRefresh");
+    expect(request.variables).toEqual({ repository: "acme/api", limit: 25 });
+    return new Response(JSON.stringify({
+      data: { requestRepositoryRefresh: { repository: "acme/api", commentCount: 4 } },
+    }), { headers: { "content-type": "application/json" } });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  const client = new EngineeringMemoryGraphqlClient("http://localhost:8790/graphql", "github-token");
+  await expect(client.refresh("acme/api", 25)).resolves.toEqual({ repository: "acme/api", commentCount: 4 });
+});

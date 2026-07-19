@@ -2,6 +2,7 @@ import {
   initializeRepositoryMemory,
   inspectRepositoryMemory,
   loadRepositoryMemory,
+  refreshRepositoryMemory,
   validateRepositoryDiff,
   type EngineeringMemorySnapshot,
   type EngineeringMemoryValidationResult,
@@ -11,11 +12,17 @@ import {
 import { createConventionStore, type ConventionStore } from "@ht6/mcp-server/store";
 import { createSchema, createYoga } from "graphql-yoga";
 
+export interface RefreshResult {
+  repository: string;
+  commentCount: number;
+}
+
 export interface ApiOperations {
   inspect(repository: string): Promise<RepositoryMemoryInspection>;
   memory(repository: string): Promise<EngineeringMemorySnapshot>;
   validate(repository: string, diff: string): Promise<EngineeringMemoryValidationResult>;
   sync(repository: string, token: string, limit?: number): Promise<MemoryInitializationResult>;
+  refresh(repository: string, token: string, limit?: number): Promise<RefreshResult>;
 }
 
 export type RepositoryAuthorizer = (repository: string, token: string) => Promise<void>;
@@ -26,6 +33,7 @@ export function defaultOperations(store: ConventionStore = createConventionStore
     memory: (repository) => loadRepositoryMemory(repository, { store }),
     validate: (repository, diff) => validateRepositoryDiff(repository, diff, { store }),
     sync: (repository, token, limit) => initializeRepositoryMemory(repository, { token, limit, store }),
+    refresh: (repository, token, limit) => refreshRepositoryMemory(repository, { token, limit }),
   };
 }
 
@@ -75,15 +83,6 @@ const typeDefs = /* GraphQL */ `
     evidence: [ConventionEvidence!]!
   }
 
-  type ConventionDetection {
-    mode: String!
-    semanticDescription: String!
-    triggerSignals: [String!]!
-    forbiddenSignals: [String!]!
-    requiredSignals: [String!]!
-    matchScope: String!
-  }
-
   type RepositoryMemory {
     repository: String!
     status: RepositoryMemoryStatus!
@@ -117,6 +116,11 @@ const typeDefs = /* GraphQL */ `
     conventionCount: Int!
   }
 
+  type RefreshResult {
+    repository: String!
+    commentCount: Int!
+  }
+
   type Query {
     repositoryMemory(repository: String!): RepositoryMemory!
     convention(repository: String!, id: ID!): Convention
@@ -125,6 +129,7 @@ const typeDefs = /* GraphQL */ `
 
   type Mutation {
     requestRepositorySync(repository: String!, limit: Int): SyncResult!
+    requestRepositoryRefresh(repository: String!, limit: Int): RefreshResult!
   }
 `;
 
@@ -163,6 +168,10 @@ export function createGraphqlApi(options: {
         requestRepositorySync: async (_parent, { repository, limit }, context) => {
           const token = await authorize(context.request, repository);
           return operations.sync(repository, token, limit ?? undefined);
+        },
+        requestRepositoryRefresh: async (_parent, { repository, limit }, context) => {
+          const token = await authorize(context.request, repository);
+          return operations.refresh(repository, token, limit ?? undefined);
         },
       },
     },

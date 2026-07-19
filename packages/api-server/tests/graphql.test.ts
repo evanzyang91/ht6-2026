@@ -18,6 +18,7 @@ function operations(): ApiOperations {
     memory: async (repository) => ({ repository, conventions: [convention] }),
     validate: async () => ({ conventionCount: 1, findings: [] }),
     sync: async (repository) => ({ repository, commentCount: 4, episodeCount: 3, conventionCount: 1 }),
+    refresh: async (repository) => ({ repository, commentCount: 4 }),
   };
 }
 
@@ -68,4 +69,21 @@ it("passes the authenticated GitHub token only to repository sync", async () => 
   });
   expect(response.status).toBe(200);
   expect(values.sync).toHaveBeenCalledWith("acme/api", "ephemeral-token", 25);
+});
+
+it("passes the authenticated GitHub token only to repository refresh", async () => {
+  const values = operations();
+  values.refresh = vi.fn(values.refresh);
+  const api = createGraphqlApi({ operations: values, authorize: async () => undefined });
+  const response = await api.fetch("http://api/graphql", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer ephemeral-token" },
+    body: JSON.stringify({ query: `mutation {
+      requestRepositoryRefresh(repository: "acme/api", limit: 25) { repository commentCount }
+    }` }),
+  });
+  const body = await response.json() as { data: { requestRepositoryRefresh: { repository: string; commentCount: number } } };
+  expect(response.status).toBe(200);
+  expect(body.data.requestRepositoryRefresh).toEqual({ repository: "acme/api", commentCount: 4 });
+  expect(values.refresh).toHaveBeenCalledWith("acme/api", "ephemeral-token", 25);
 });
