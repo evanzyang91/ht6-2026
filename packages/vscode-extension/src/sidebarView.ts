@@ -4,6 +4,7 @@ export interface SidebarSnapshot {
   hasFolder: boolean;
   trusted: boolean;
   signedIn: boolean;
+  /** Kept for callers that still branch on hosted-vs-local mode; not rendered in the UI. */
   apiUrl: string;
   repository?: string;
   repositoryError?: string;
@@ -47,46 +48,42 @@ function formatLastSync(snapshot: SidebarSnapshot): string {
   return `${when} · ${snapshot.lastSyncCommentCount ?? 0} stored comments`;
 }
 
-function row(label: string, valueHtml: string): string {
-  return `<div class="row"><span class="row-label">${escapeHtml(label)}</span><span class="row-value">${valueHtml}</span></div>`;
+function row(label: string, valueHtml: string, tone: "ok" | "warn" | "error" | "muted" = "muted"): string {
+  return `<div class="row"><span class="dot ${tone}"></span><span class="row-label">${escapeHtml(label)}</span><span class="row-value">${valueHtml}</span></div>`;
 }
 
 function button(command: string, text: string, primary = false): string {
-  return `<button data-command="${escapeHtml(command)}" class="${primary ? "primary" : ""}">${escapeHtml(text)}</button>`;
+  return `<button data-command="${escapeHtml(command)}" class="${primary ? "primary" : "secondary"}">${escapeHtml(text)}</button>`;
 }
 
 /** Pure HTML rendering, decoupled from `vscode` so it's directly unit-testable. */
 export function renderSidebarHtml(snapshot: SidebarSnapshot, nonce: string): string {
   const buttons: string[] = [];
   const rows: string[] = [];
+  let heroTone: "ok" | "warn" | "error" | "muted" = "muted";
+  let heroHeadline = "";
+  let heroDetail = "";
 
   if (!snapshot.hasFolder) {
-    rows.push(row("Workspace", `<span class="muted">No folder open</span>`));
+    heroHeadline = "No folder open";
+    heroDetail = "Open a repository to get started.";
+  } else if (!snapshot.trusted) {
+    heroTone = "error";
+    heroHeadline = "Workspace not trusted";
+    heroDetail = "Trust this workspace to enable Engineering Memory.";
+    buttons.push(button("trustWorkspace", "Trust Workspace…", true));
   } else {
-    rows.push(row("Trust", snapshot.trusted
-      ? `<span class="ok">Trusted</span>`
-      : `<span class="error">Not trusted</span>`));
-    if (!snapshot.trusted) buttons.push(button("trustWorkspace", "Trust Workspace…", true));
-  }
-
-  if (snapshot.hasFolder && snapshot.trusted) {
-    rows.push(row("Repository", snapshot.repository
-      ? `<span class="ok">${escapeHtml(snapshot.repository)}</span>`
-      : `<span class="error">${escapeHtml(snapshot.repositoryError ?? "Not detected")}</span>`));
-
-    rows.push(row("GitHub", snapshot.signedIn
-      ? `<span class="ok">Signed in</span>`
-      : `<span class="muted">Not signed in</span>`));
-    if (!snapshot.signedIn) buttons.push(button("signIn", "Sign in to GitHub…", true));
-
-    rows.push(row("API mode", snapshot.apiUrl
-      ? `Hosted API — ${escapeHtml(snapshot.apiUrl)}`
-      : `Local JSON store`));
-
     const memory = statusLabel(snapshot);
-    rows.push(row("Memory status", `<span class="${memory.tone}">${escapeHtml(memory.text)}</span>`));
+    heroTone = memory.tone;
+    heroHeadline = memory.text;
+    heroDetail = formatLastSync(snapshot) === "Never" ? "Never synced" : `Last sync: ${formatLastSync(snapshot)}`;
 
-    rows.push(row("Last sync", `<span class="muted">${escapeHtml(formatLastSync(snapshot))}</span>`));
+    rows.push(row("Repository", snapshot.repository
+      ? escapeHtml(snapshot.repository)
+      : `<span class="error">${escapeHtml(snapshot.repositoryError ?? "Not detected")}</span>`, snapshot.repository ? "ok" : "error"));
+
+    rows.push(row("GitHub", snapshot.signedIn ? "Signed in" : "Not signed in", snapshot.signedIn ? "ok" : "muted"));
+    if (!snapshot.signedIn) buttons.push(button("signIn", "Sign in to GitHub…", true));
 
     buttons.push(button("initialize", snapshot.status === "failed" ? "Retry Setup" : "Initialize Repository Memory"));
     buttons.push(button("syncNow", "Sync Now"));
@@ -101,47 +98,98 @@ export function renderSidebarHtml(snapshot: SidebarSnapshot, nonce: string): str
 <meta charset="utf-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';" />
 <style>
+  * { box-sizing: border-box; }
   body {
     font-family: var(--vscode-font-family);
     font-size: var(--vscode-font-size);
     color: var(--vscode-foreground);
-    padding: 8px 4px;
+    padding: 12px;
+    margin: 0;
   }
+  .hero {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--vscode-textBlockQuote-background, var(--vscode-editorWidget-background));
+    border-left: 3px solid var(--hero-accent, var(--vscode-panel-border));
+    margin-bottom: 14px;
+  }
+  .hero.ok { --hero-accent: var(--vscode-testing-iconPassed, #3fb950); }
+  .hero.warn { --hero-accent: var(--vscode-editorWarning-foreground); }
+  .hero.error { --hero-accent: var(--vscode-errorForeground); }
+  .hero.muted { --hero-accent: var(--vscode-descriptionForeground); }
+  .hero-dot {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-top: 4px;
+    background: var(--hero-accent);
+  }
+  .hero-headline { font-weight: 600; line-height: 1.4; }
+  .hero-detail { color: var(--vscode-descriptionForeground); font-size: 0.92em; margin-top: 2px; }
+  .section-title {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.78em;
+    font-weight: 600;
+    color: var(--vscode-descriptionForeground);
+    margin: 0 0 6px 2px;
+  }
+  .rows { margin-bottom: 16px; }
   .row {
     display: flex;
-    justify-content: space-between;
+    align-items: center;
     gap: 8px;
-    padding: 4px 0;
-    border-bottom: 1px solid var(--vscode-panel-border);
+    padding: 5px 2px;
   }
-  .row-label { color: var(--vscode-descriptionForeground); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--vscode-descriptionForeground); }
+  .dot.ok { background: var(--vscode-testing-iconPassed, #3fb950); }
+  .dot.warn { background: var(--vscode-editorWarning-foreground); }
+  .dot.error { background: var(--vscode-errorForeground); }
+  .row-label { color: var(--vscode-descriptionForeground); flex: 1; }
   .row-value { text-align: right; word-break: break-word; }
   .ok { color: var(--vscode-testing-iconPassed, #3fb950); }
   .warn { color: var(--vscode-editorWarning-foreground); }
   .error { color: var(--vscode-errorForeground); }
   .muted { color: var(--vscode-descriptionForeground); }
-  .actions { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .actions { display: flex; flex-direction: column; gap: 6px; }
   button {
     font-family: inherit;
     font-size: inherit;
-    padding: 6px 10px;
-    border: 1px solid var(--vscode-button-border, transparent);
-    border-radius: 2px;
-    background: var(--vscode-button-secondaryBackground, transparent);
-    color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+    padding: 7px 12px;
+    border: 1px solid transparent;
+    border-radius: 6px;
     cursor: pointer;
-    text-align: left;
+    text-align: center;
+    transition: background 0.1s ease-in-out;
   }
-  button:hover { background: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground)); }
+  button.secondary {
+    background: transparent;
+    color: var(--vscode-foreground);
+    border-color: var(--vscode-button-border, var(--vscode-panel-border));
+  }
+  button.secondary:hover { background: var(--vscode-toolbar-hoverBackground); }
   button.primary {
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
+    font-weight: 500;
   }
   button.primary:hover { background: var(--vscode-button-hoverBackground); }
 </style>
 </head>
 <body>
-  <div class="rows">${rows.join("")}</div>
+  <div class="hero ${heroTone}">
+    <span class="hero-dot"></span>
+    <div>
+      <div class="hero-headline">${escapeHtml(heroHeadline)}</div>
+      <div class="hero-detail">${escapeHtml(heroDetail)}</div>
+    </div>
+  </div>
+  ${rows.length ? `<div class="section-title">Details</div><div class="rows">${rows.join("")}</div>` : ""}
+  <div class="section-title">Actions</div>
   <div class="actions">${buttons.join("")}</div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
