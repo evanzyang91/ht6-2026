@@ -75,9 +75,19 @@ function compileConventions(
         requiredSignals: [],
         matchScope: "file",
       };
-    const prohibitedSignals = explicitDetections.length ? detection.forbiddenSignals : legacyProhibitedSignals;
+    const semanticProhibitedSignals = unique(cluster.flatMap(
+      (episode) => semantics.get(episode.id)?.prohibitedSignals ?? [],
+    ));
+    const semanticPreferredSignals = unique(cluster.flatMap(
+      (episode) => semantics.get(episode.id)?.preferredSignals ?? [],
+    ));
+    const prohibitedSignals = explicitDetections.length
+      ? detection.mode === "semantic" ? semanticProhibitedSignals : detection.forbiddenSignals
+      : legacyProhibitedSignals;
     const preferredSignals = explicitDetections.length
-      ? unique([...detection.requiredSignals, ...cluster.flatMap((episode) => semantics.get(episode.id)?.preferredSignals ?? [])])
+      ? detection.mode === "missing-required-signal"
+        ? detection.requiredSignals
+        : semanticPreferredSignals
       : legacyPreferredSignals;
     const distinctPrs = new Set(cluster.map((episode) => episode.pullRequest)).size;
     const acceptedCount = cluster.filter((episode) => episode.acceptedCode).length;

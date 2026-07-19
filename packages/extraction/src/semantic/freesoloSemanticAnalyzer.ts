@@ -1,5 +1,8 @@
 import type { SemanticAnalysis, SemanticAnalyzer, SemanticInput } from "./types.js";
-import { parseSemanticAnalysis } from "./semanticAnalysisValidation.js";
+import {
+  parseSemanticAnalysis,
+  type SemanticAnalysisNormalization,
+} from "./semanticAnalysisValidation.js";
 
 export const ENGINEERING_MEMORY_SYSTEM_PROMPT = `You normalize one pull-request review episode into Engineering Memory JSON.
 Return raw JSON only, without Markdown fences or commentary. Use exactly these top-level fields: intent, title, rule, rationale, prohibitedSignals, preferredSignals, detection. intent must be one of actionable-change, architecture, testing, security, style, question-nonactionable. Every signal must be the smallest reusable exact code substring, never an English description or an entire code line when a stable identifier is available. detection must contain exactly mode, semanticDescription, triggerSignals, forbiddenSignals, requiredSignals, matchScope. mode must be forbidden-signal, missing-required-signal, or semantic; matchScope must be line or file. Use the English semanticDescription to explain the contextual condition and the signal arrays to encode deterministic detection.
@@ -23,6 +26,20 @@ export interface FreesoloSemanticAnalyzerOptions {
   maxConcurrency?: number;
   fetch?: typeof globalThis.fetch;
   sleep?: (milliseconds: number) => Promise<void>;
+  onAttemptFailure?: (event: FreesoloAttemptFailure) => void;
+  onNormalization?: (event: FreesoloNormalization) => void;
+}
+
+export interface FreesoloAttemptFailure {
+  attempt: number;
+  maxAttempts: number;
+  willRetry: boolean;
+  error: unknown;
+  input: SemanticInput;
+}
+
+export interface FreesoloNormalization extends SemanticAnalysisNormalization {
+  input: SemanticInput;
 }
 
 class Semaphore {
@@ -77,6 +94,8 @@ export class FreesoloSemanticAnalyzer implements SemanticAnalyzer {
   private readonly fetchImplementation: typeof globalThis.fetch;
   private readonly sleep: (milliseconds: number) => Promise<void>;
   private readonly semaphore: Semaphore;
+  private readonly onAttemptFailure?: (event: FreesoloAttemptFailure) => void;
+  private readonly onNormalization?: (event: FreesoloNormalization) => void;
 
   constructor(options: FreesoloSemanticAnalyzerOptions) {
     this.url = endpoint(options.baseUrl);
@@ -90,6 +109,8 @@ export class FreesoloSemanticAnalyzer implements SemanticAnalyzer {
     this.fetchImplementation = options.fetch ?? globalThis.fetch;
     this.sleep = options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
     this.semaphore = new Semaphore(positiveInteger(options.maxConcurrency, 4, "FREESOLO_MAX_CONCURRENCY"));
+    this.onAttemptFailure = options.onAttemptFailure;
+    this.onNormalization = options.onNormalization;
   }
 
   async analyze(input: SemanticInput): Promise<SemanticAnalysis> {
@@ -104,7 +125,15 @@ export class FreesoloSemanticAnalyzer implements SemanticAnalyzer {
       } catch (error) {
         lastError = error;
         const retryable = !(error instanceof FreesoloHttpError) || retryableStatus(error.status);
-        if (!retryable || attempt === this.maxRetries) break;
+        const willRetry = retryable && attempt < this.maxRetries;
+        this.onAttemptFailure?.({
+          attempt: attempt + 1,
+          maxAttempts: this.maxRetries + 1,
+          willRetry,
+          error,
+          input,
+        });
+        if (!willRetry) break;
         await this.sleep(this.retryDelayMs * (2 ** attempt));
       }
     }
@@ -146,7 +175,9 @@ export class FreesoloSemanticAnalyzer implements SemanticAnalyzer {
       const payload: unknown = await response.json();
       const content = isResponsePayload(payload) ? payload.choices[0]?.message?.content : undefined;
       if (typeof content !== "string") throw new Error("Freesolo response did not contain choices[0].message.content");
-      return parseSemanticAnalysis(content, input);
+      return parseSemanticAnalysis(content, input, {
+        onNormalization: (normalization) => this.onNormalization?.({ ...normalization, input }),
+      });
     } finally {
       clearTimeout(timeout);
     }

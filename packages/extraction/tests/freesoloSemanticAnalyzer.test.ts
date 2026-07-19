@@ -66,7 +66,25 @@ describe("semantic response validation", () => {
     );
     const inconsistent = structuredClone(validAnalysis);
     inconsistent.prohibitedSignals = ["router.get"];
-    expect(() => parseSemanticAnalysis(JSON.stringify(inconsistent), input)).toThrow("empty prohibitedSignals");
+    expect(() => parseSemanticAnalysis(JSON.stringify(inconsistent), input)).toThrow(
+      'received ["router.get"]',
+    );
+  });
+
+  it("normalizes redundant missing-required preferred signals from canonical detection", () => {
+    const omitted = structuredClone(validAnalysis);
+    omitted.preferredSignals = [];
+    const onNormalization = vi.fn();
+
+    expect(parseSemanticAnalysis(JSON.stringify(omitted), input, { onNormalization })).toMatchObject({
+      preferredSignals: ["requireFeature"],
+      detection: { requiredSignals: ["requireFeature"] },
+    });
+    expect(onNormalization).toHaveBeenCalledWith({
+      reason: "missing-required-preferred-signals",
+      originalPreferredSignals: [],
+      normalizedPreferredSignals: ["requireFeature"],
+    });
   });
 });
 
@@ -98,6 +116,7 @@ describe("FreesoloSemanticAnalyzer", () => {
   });
 
   it("retries transient responses and not non-retryable authentication failures", async () => {
+    const onAttemptFailure = vi.fn();
     const transientFetch = vi.fn()
       .mockResolvedValueOnce(new Response(null, { status: 503 }))
       .mockResolvedValueOnce(completion());
@@ -107,9 +126,16 @@ describe("FreesoloSemanticAnalyzer", () => {
       fetch: transientFetch as typeof fetch,
       maxRetries: 1,
       retryDelayMs: 0,
+      onAttemptFailure,
     });
     await expect(retrying.analyze(input)).resolves.toMatchObject({ intent: "architecture" });
     expect(transientFetch).toHaveBeenCalledTimes(2);
+    expect(onAttemptFailure).toHaveBeenCalledWith(expect.objectContaining({
+      attempt: 1,
+      maxAttempts: 2,
+      willRetry: true,
+      input,
+    }));
 
     const unauthorizedFetch = vi.fn(async () => new Response(null, { status: 401 }));
     const unauthorized = new FreesoloSemanticAnalyzer({

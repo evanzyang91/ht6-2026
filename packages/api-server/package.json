@@ -6,6 +6,7 @@
   "main": "./dist/server.js",
   "scripts": {
     "build": "tsc -b",
+    "prestart": "npm run build --workspace=@ht6/extraction -- --force && npm run build --workspace=@ht6/mcp-server -- --force && npm run build -- --force",
     "start": "tsx src/server.ts",
     "test": "vitest run --root ../.. packages/api-server/tests"
   },

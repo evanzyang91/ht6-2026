@@ -19,6 +19,16 @@ export class SemanticAnalysisValidationError extends Error {
   }
 }
 
+export interface SemanticAnalysisNormalization {
+  reason: "missing-required-preferred-signals";
+  originalPreferredSignals: string[];
+  normalizedPreferredSignals: string[];
+}
+
+export interface SemanticAnalysisValidationOptions {
+  onNormalization?: (normalization: SemanticAnalysisNormalization) => void;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -83,7 +93,11 @@ function parseDetection(value: unknown): ConventionDetection {
 }
 
 /** Parses and grounds the model response before it can enter persistent engineering memory. */
-export function parseSemanticAnalysis(responseText: string, input: SemanticInput): SemanticAnalysis {
+export function parseSemanticAnalysis(
+  responseText: string,
+  input: SemanticInput,
+  options: SemanticAnalysisValidationOptions = {},
+): SemanticAnalysis {
   const text = responseText.trim();
   if (!text.startsWith("{") || !text.endsWith("}")) {
     throw new SemanticAnalysisValidationError("response must be raw JSON without Markdown or commentary");
@@ -102,7 +116,7 @@ export function parseSemanticAnalysis(responseText: string, input: SemanticInput
     throw new SemanticAnalysisValidationError(`unsupported intent ${JSON.stringify(intent)}`);
   }
   const prohibitedSignals = stringArray(parsed.prohibitedSignals, "prohibitedSignals");
-  const preferredSignals = stringArray(parsed.preferredSignals, "preferredSignals");
+  let preferredSignals = stringArray(parsed.preferredSignals, "preferredSignals");
   const detection = parseDetection(parsed.detection);
 
   if (detection.mode === "forbidden-signal") {
@@ -113,8 +127,18 @@ export function parseSemanticAnalysis(responseText: string, input: SemanticInput
     if (!detection.triggerSignals.length || !detection.requiredSignals.length || detection.forbiddenSignals.length) {
       throw new SemanticAnalysisValidationError("missing-required-signal requires triggerSignals and requiredSignals only");
     }
-    if (prohibitedSignals.length || !sameMembers(preferredSignals, detection.requiredSignals)) {
-      throw new SemanticAnalysisValidationError("missing-required-signal requires empty prohibitedSignals and preferredSignals equal to requiredSignals");
+    if (prohibitedSignals.length) {
+      throw new SemanticAnalysisValidationError(
+        `missing-required-signal requires empty prohibitedSignals; received ${JSON.stringify(prohibitedSignals)}`,
+      );
+    }
+    if (!sameMembers(preferredSignals, detection.requiredSignals)) {
+      options.onNormalization?.({
+        reason: "missing-required-preferred-signals",
+        originalPreferredSignals: preferredSignals,
+        normalizedPreferredSignals: detection.requiredSignals,
+      });
+      preferredSignals = [...detection.requiredSignals];
     }
   } else if (
     detection.triggerSignals.length || detection.forbiddenSignals.length || detection.requiredSignals.length

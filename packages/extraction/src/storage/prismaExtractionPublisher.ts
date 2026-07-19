@@ -98,6 +98,7 @@ async function createConvention(
       languages: convention.languages,
       prohibitedSignals: convention.prohibitedSignals,
       preferredSignals: convention.preferredSignals,
+      detection: convention.detection as Prisma.InputJsonValue | undefined,
       confidence: convention.confidence,
     },
     select: { id: true },
@@ -131,14 +132,27 @@ export class PrismaExtractionPublisher implements ExtractionPublisher {
       const episodes = episodesByRepository.get(slug) ?? [];
       const conventions = conventionsByRepository.get(slug) ?? [];
       const digest = inputDigest(comments);
-      const reusable = await this.prisma.extractionRun.findFirst({
+      const fingerprint = {
+        repositoryId: repository.id,
+        inputDigest: digest,
+        extractorVersion: snapshot.extractorVersion,
+        analyzerProvider: snapshot.analyzerProvider,
+        analyzerVersion: snapshot.analyzerVersion,
+      } as const;
+      // Prefer the currently published winner. Under overlapping refreshes a newer
+      // superseded row can otherwise be selected and then collide while promoted.
+      const published = await this.prisma.extractionRun.findFirst({
         where: {
-          repositoryId: repository.id,
-          inputDigest: digest,
-          extractorVersion: snapshot.extractorVersion,
-          analyzerProvider: snapshot.analyzerProvider,
-          analyzerVersion: snapshot.analyzerVersion,
-          status: { in: [ExtractionRunStatus.PUBLISHED, ExtractionRunStatus.SUPERSEDED] },
+          ...fingerprint,
+          status: ExtractionRunStatus.PUBLISHED,
+        },
+        orderBy: { startedAt: "desc" },
+        select: { id: true },
+      });
+      const reusable = published ?? await this.prisma.extractionRun.findFirst({
+        where: {
+          ...fingerprint,
+          status: ExtractionRunStatus.SUPERSEDED,
         },
         orderBy: { startedAt: "desc" },
         select: { id: true },
@@ -166,12 +180,8 @@ export class PrismaExtractionPublisher implements ExtractionPublisher {
       }
       const run = await this.prisma.extractionRun.create({
         data: {
-          repositoryId: repository.id,
-          inputDigest: digest,
+          ...fingerprint,
           inputCommentCount: comments.length,
-          analyzerProvider: snapshot.analyzerProvider,
-          analyzerVersion: snapshot.analyzerVersion,
-          extractorVersion: snapshot.extractorVersion,
         },
         select: { id: true },
       });
@@ -207,6 +217,21 @@ export class PrismaExtractionPublisher implements ExtractionPublisher {
           });
         });
       } catch (error) {
+        // Two workers can both observe no reusable run and build the same snapshot.
+        // The partial unique index chooses one winner at PUBLISHED transition. If an
+        // equivalent winner now exists, discard this empty rolled-back BUILDING row
+        // and treat publication as the idempotent success it is.
+        const concurrentWinner = await this.prisma.extractionRun.findFirst({
+          where: {
+            ...fingerprint,
+            status: ExtractionRunStatus.PUBLISHED,
+          },
+          select: { id: true },
+        });
+        if (concurrentWinner) {
+          await this.prisma.extractionRun.delete({ where: { id: run.id } });
+          continue;
+        }
         await this.prisma.extractionRun.update({
           where: { id: run.id },
           data: {

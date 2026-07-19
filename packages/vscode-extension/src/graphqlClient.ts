@@ -13,6 +13,7 @@ interface GraphqlResponse<T> {
 const conventionFields = `
   id repository title rule rationale category confidence
   pathScopes languages prohibitedSignals preferredSignals supportingEpisodes
+  detection { mode semanticDescription triggerSignals forbiddenSignals requiredSignals matchScope }
   evidence { episodeId pullRequest reviewer filePath reviewComment rejectedCode acceptedCode }
 `;
 

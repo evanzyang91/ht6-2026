@@ -49,6 +49,15 @@ const typeDefs = /* GraphQL */ `
     acceptedCode: String
   }
 
+  type ConventionDetection {
+    mode: String!
+    semanticDescription: String!
+    triggerSignals: [String!]!
+    forbiddenSignals: [String!]!
+    requiredSignals: [String!]!
+    matchScope: String!
+  }
+
   type Convention {
     id: ID!
     repository: String!
@@ -60,6 +69,7 @@ const typeDefs = /* GraphQL */ `
     languages: [String!]!
     prohibitedSignals: [String!]!
     preferredSignals: [String!]!
+    detection: ConventionDetection
     confidence: Float!
     supportingEpisodes: [ID!]!
     evidence: [ConventionEvidence!]!

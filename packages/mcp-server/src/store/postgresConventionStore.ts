@@ -1,4 +1,4 @@
-import type { CommentIntent, Convention } from "@ht6/shared";
+import type { CommentIntent, Convention, ConventionDetection } from "@ht6/shared";
 import { Pool } from "pg";
 import type { ConventionStore, StoredMemoryStatus } from "./conventionStore.js";
 
@@ -12,6 +12,7 @@ interface ConventionRow {
   languages: string[];
   prohibited_signals: string[];
   preferred_signals: string[];
+  detection: unknown | null;
   confidence: number;
   episode_key: string | null;
   pull_request: number | null;
@@ -20,6 +21,35 @@ interface ConventionRow {
   review_comment: string | null;
   rejected_code: string | null;
   accepted_code: string | null;
+}
+
+function stringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function storedDetection(value: unknown): ConventionDetection | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const item = value as Record<string, unknown>;
+  if (item.mode !== "forbidden-signal" && item.mode !== "missing-required-signal" && item.mode !== "semantic") {
+    throw new Error(`Unknown stored convention detection mode: ${String(item.mode)}`);
+  }
+  if (item.matchScope !== "line" && item.matchScope !== "file") {
+    throw new Error(`Unknown stored convention detection scope: ${String(item.matchScope)}`);
+  }
+  if (typeof item.semanticDescription !== "string"
+    || !stringArray(item.triggerSignals)
+    || !stringArray(item.forbiddenSignals)
+    || !stringArray(item.requiredSignals)) {
+    throw new Error("Invalid stored convention detection payload");
+  }
+  return {
+    mode: item.mode,
+    semanticDescription: item.semanticDescription,
+    triggerSignals: item.triggerSignals,
+    forbiddenSignals: item.forbiddenSignals,
+    requiredSignals: item.requiredSignals,
+    matchScope: item.matchScope,
+  };
 }
 
 function sharedIntent(value: string): CommentIntent {
@@ -48,7 +78,7 @@ export class PostgresConventionStore implements ConventionStore {
     const result = await this.pool.query<ConventionRow>(`
       SELECT
         c.convention_key, c.title, c.rule, c.rationale, c.category::text,
-        c.path_scopes, c.languages, c.prohibited_signals, c.preferred_signals,
+        c.path_scopes, c.languages, c.prohibited_signals, c.preferred_signals, c.detection,
         c.confidence,
         e.episode_key, e.pull_request, e.reviewer, e.file_path,
         e.review_comment, e.rejected_code, e.accepted_code
@@ -76,6 +106,7 @@ export class PostgresConventionStore implements ConventionStore {
           languages: row.languages,
           prohibitedSignals: row.prohibited_signals,
           preferredSignals: row.preferred_signals,
+          detection: storedDetection(row.detection),
           confidence: row.confidence,
           supportingEpisodes: [],
           evidence: [],

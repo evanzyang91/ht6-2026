@@ -24,13 +24,21 @@ export function clusterEpisodes(
     const intersection = [...a].filter((token) => b.has(token)).length;
     return intersection / Math.max(1, Math.min(a.size, b.size));
   };
+  const compatibleDetection = (left: ReviewEpisode, right: ReviewEpisode) => {
+    const leftDetection = semantics.get(left.id)?.detection;
+    const rightDetection = semantics.get(right.id)?.detection;
+    if (!leftDetection || !rightDetection) return !leftDetection && !rightDetection;
+    return leftDetection.mode === rightDetection.mode
+      && leftDetection.matchScope === rightDetection.matchScope;
+  };
   const clusters: ReviewEpisode[][] = [];
   for (const episode of episodes.filter((item) => item.intent !== "question-nonactionable")) {
     const episodeTokens = tokens(episode);
     const match = clusters.find((cluster) =>
       cluster[0].repository === episode.repository &&
       cluster[0].intent === episode.intent &&
-      cluster.some((candidate) => similarity(tokens(candidate), episodeTokens) >= 0.35)
+      cluster.some((candidate) => compatibleDetection(candidate, episode)
+        && similarity(tokens(candidate), episodeTokens) >= 0.35)
     );
     if (match) match.push(episode); else clusters.push([episode]);
   }

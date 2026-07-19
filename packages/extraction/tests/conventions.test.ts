@@ -82,4 +82,71 @@ describe("engineering-memory extraction", () => {
       preferredSignals: ["userService.list"],
     });
   });
+
+  it("keeps missing-required signals exact and splits incompatible detection clusters", () => {
+    const missing = episode(
+      "missing",
+      31,
+      "Order routes require authentication",
+      "router.post('/orders', createOrder)",
+      "router.post('/orders', requireAuth, createOrder)",
+    );
+    missing.semanticAnalysis.preferredSignals = ["requireAuth", "descriptive-extra"];
+    missing.semanticAnalysis.detection = {
+      mode: "missing-required-signal",
+      semanticDescription: "An order route is missing authentication.",
+      triggerSignals: ["router.post"],
+      forbiddenSignals: [],
+      requiredSignals: ["requireAuth"],
+      matchScope: "file",
+    };
+    const forbidden = episode(
+      "forbidden",
+      32,
+      "Order routes require authentication",
+      "router.post('/orders', createOrder)",
+      "secureRouter.post('/orders', createOrder)",
+    );
+    forbidden.semanticAnalysis.prohibitedSignals = ["router.post"];
+    forbidden.semanticAnalysis.detection = {
+      mode: "forbidden-signal",
+      semanticDescription: "The unguarded router is forbidden.",
+      triggerSignals: [],
+      forbiddenSignals: ["router.post"],
+      requiredSignals: [],
+      matchScope: "file",
+    };
+
+    const conventions = buildConventions([missing, forbidden]);
+
+    expect(conventions).toHaveLength(2);
+    expect(conventions.find((item) => item.detection?.mode === "missing-required-signal")?.preferredSignals)
+      .toEqual(["requireAuth"]);
+  });
+
+  it("preserves grounded descriptive signals for semantic conventions", () => {
+    const semantic = episode(
+      "semantic",
+      40,
+      "Prefer intention-revealing names",
+      "const x = order.total",
+      "const orderTotal = order.total",
+    );
+    semantic.semanticAnalysis.prohibitedSignals = ["x"];
+    semantic.semanticAnalysis.preferredSignals = ["orderTotal"];
+    semantic.semanticAnalysis.detection = {
+      mode: "semantic",
+      semanticDescription: "A local variable name does not communicate its meaning.",
+      triggerSignals: [],
+      forbiddenSignals: [],
+      requiredSignals: [],
+      matchScope: "line",
+    };
+
+    expect(buildConventions([semantic])[0]).toMatchObject({
+      prohibitedSignals: ["x"],
+      preferredSignals: ["orderTotal"],
+      detection: { mode: "semantic", matchScope: "line" },
+    });
+  });
 });

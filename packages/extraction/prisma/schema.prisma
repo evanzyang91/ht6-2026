@@ -114,6 +114,7 @@ model Convention {
   languages         String[]      @default([])
   prohibitedSignals String[]      @default([]) @map("prohibited_signals")
   preferredSignals  String[]      @default([]) @map("preferred_signals")
+  detection         Json?
   confidence        Float
   createdAt         DateTime      @default(now()) @map("created_at")
 

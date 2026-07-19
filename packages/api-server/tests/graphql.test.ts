@@ -5,6 +5,8 @@ const convention = {
   id: "conv-1", repository: "acme/api", title: "Use services", rule: "Controllers use services",
   rationale: "Observed", category: "architecture", pathScopes: ["src/**"], languages: ["typescript"],
   prohibitedSignals: ["prisma.user.findMany"], preferredSignals: ["userService.list"], confidence: 0.91,
+  detection: { mode: "forbidden-signal", semanticDescription: "Direct Prisma access is forbidden.",
+    triggerSignals: [], forbiddenSignals: ["prisma.user.findMany"], requiredSignals: [], matchScope: "line" },
   supportingEpisodes: ["episode-1"], evidence: [{ episodeId: "episode-1", pullRequest: 12,
     reviewer: "sam", filePath: "src/controller.ts", reviewComment: "Use a service",
     rejectedCode: "prisma.user.findMany()", acceptedCode: "userService.list()" }],
@@ -26,11 +28,19 @@ it("serves repository memory through the domain schema after authorization", asy
     method: "POST",
     headers: { "content-type": "application/json", authorization: "Bearer github-token" },
     body: JSON.stringify({ query: `query($repository: String!) {
-      repositoryMemory(repository: $repository) { status conventionCount conventions { id evidence { pullRequest } } }
+      repositoryMemory(repository: $repository) {
+        status conventionCount conventions {
+          id detection { mode semanticDescription forbiddenSignals matchScope }
+          evidence { pullRequest }
+        }
+      }
     }`, variables: { repository: "acme/api" } }),
   });
   const body = await response.json() as { data: { repositoryMemory: { status: string; conventions: unknown[] } } };
-  expect(body.data.repositoryMemory).toMatchObject({ status: "ready", conventions: [{ id: "conv-1" }] });
+  expect(body.data.repositoryMemory).toMatchObject({
+    status: "ready",
+    conventions: [{ id: "conv-1", detection: { mode: "forbidden-signal", matchScope: "line" } }],
+  });
   expect(authorize).toHaveBeenCalledWith("acme/api", "github-token");
 });
 

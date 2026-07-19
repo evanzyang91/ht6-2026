@@ -24,7 +24,24 @@ export interface ExtractionResult {
   publishedRepositoryCount: number;
 }
 
-export const EXTRACTION_PIPELINE_VERSION = "1";
+export const EXTRACTION_PIPELINE_VERSION = "2";
+
+function errorChain(error: unknown): string {
+  const messages: string[] = [];
+  let current: unknown = error;
+  while (current instanceof Error && messages.length < 4) {
+    messages.push(current.message);
+    current = current.cause;
+  }
+  if (!messages.length) messages.push(String(error));
+  return messages.join(" <- ");
+}
+
+function episodeLabel(input: { repository: string; pullRequest: number; filePath: string; reviewComment: string }): string {
+  const review = input.reviewComment.replace(/\s+/g, " ").trim();
+  const summary = review.length > 120 ? `${review.slice(0, 117)}...` : review;
+  return `${input.repository}#${input.pullRequest} ${input.filePath} review=${JSON.stringify(summary)}`;
+}
 
 function defaultDataDirectory(): string {
   const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
@@ -83,11 +100,28 @@ export async function runConfiguredExtraction(
   analyzer?: SemanticAnalyzer,
 ): Promise<ExtractionResult> {
   const configuredAnalyzer = analyzer ?? createSemanticAnalyzerFromEnv(process.env, {
-    onFallback: (error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      process.stderr.write(`Freesolo semantic analysis failed; using deterministic fallback: ${message}\n`);
+    onAttemptFailure: ({ attempt, maxAttempts, willRetry, error, input }) => {
+      process.stderr.write(
+        `Freesolo attempt ${attempt}/${maxAttempts} failed for ${episodeLabel(input)}; `
+        + `${willRetry ? "retrying" : "no retries remain"}: ${errorChain(error)}\n`,
+      );
+    },
+    onNormalization: ({ input, originalPreferredSignals, normalizedPreferredSignals }) => {
+      process.stderr.write(
+        `Freesolo normalized missing-required signals for ${episodeLabel(input)}; `
+        + `preferredSignals=${JSON.stringify(originalPreferredSignals)} -> `
+        + `${JSON.stringify(normalizedPreferredSignals)} from detection.requiredSignals\n`,
+      );
+    },
+    onFallback: (error, input) => {
+      process.stderr.write(
+        `Freesolo fallback for ${episodeLabel(input)}; using deterministic analysis: ${errorChain(error)}\n`,
+      );
     },
   });
+  process.stderr.write(
+    `Engineering Memory semantic analyzer: ${configuredAnalyzer.provider}@${configuredAnalyzer.version}\n`,
+  );
   const publisher = process.env.DATABASE_URL
     ? createPrismaExtractionPublisher(process.env.DATABASE_URL)
     : undefined;
