@@ -46,7 +46,7 @@ describe("semantic response validation", () => {
     expect(ENGINEERING_MEMORY_SYSTEM_PROMPT).toBe(trainingPrompt.trim());
   });
 
-  it("accepts a grounded contract and rejects invented signals", () => {
+  it("accepts a grounded contract and replaces invented detection signals deterministically", () => {
     expect(parseSemanticAnalysis(JSON.stringify(validAnalysis), input)).toMatchObject({
       intent: "architecture",
       detection: { mode: "missing-required-signal" },
@@ -55,8 +55,12 @@ describe("semantic response validation", () => {
     invented.detection.requiredSignals = ["inventedFeatureGate"];
     expect(parseSemanticAnalysis(JSON.stringify(invented), input)).toMatchObject({
       prohibitedSignals: [],
-      preferredSignals: [],
-      detection: { mode: "semantic" },
+      preferredSignals: ["requireFeature"],
+      detection: {
+        mode: "missing-required-signal",
+        triggerSignals: ["router.get"],
+        requiredSignals: ["requireFeature"],
+      },
     });
   });
 
@@ -72,7 +76,7 @@ describe("semantic response validation", () => {
     });
   });
 
-  it("downgrades executable detection that would also reject the accepted fix", () => {
+  it("replaces executable detection that would also reject the accepted fix", () => {
     const unsafe = {
       ...structuredClone(validAnalysis),
       detection: {
@@ -86,19 +90,69 @@ describe("semantic response validation", () => {
     };
     expect(parseSemanticAnalysis(JSON.stringify(unsafe), input)).toMatchObject({
       prohibitedSignals: [],
-      preferredSignals: [],
-      detection: { mode: "semantic" },
+      preferredSignals: ["requireFeature"],
+      detection: { mode: "missing-required-signal" },
     });
   });
 
-  it("downgrades an intent value mistakenly returned as detection.mode", () => {
+  it("replaces an intent value mistakenly returned as detection.mode and reports why", () => {
     const confused = structuredClone(validAnalysis);
     confused.detection.mode = "architecture";
-    expect(parseSemanticAnalysis(JSON.stringify(confused), input)).toMatchObject({
+    const onDetectionFallback = vi.fn();
+    expect(parseSemanticAnalysis(JSON.stringify(confused), input, { onDetectionFallback })).toMatchObject({
       intent: "architecture",
       prohibitedSignals: [],
-      preferredSignals: [],
+      preferredSignals: ["requireFeature"],
+      detection: { mode: "missing-required-signal" },
+    });
+    expect(onDetectionFallback).toHaveBeenCalledWith({
+      reason: "unsupported-mode",
+      originalMode: "architecture",
+      replacementMode: "missing-required-signal",
+    });
+  });
+
+  it("keeps an intentional semantic-only detection semantic", () => {
+    const semantic = structuredClone(validAnalysis);
+    semantic.detection = {
+      mode: "semantic",
+      semanticDescription: "The naming choice requires contextual judgment.",
+      triggerSignals: [],
+      forbiddenSignals: [],
+      requiredSignals: [],
+      matchScope: "line",
+    };
+    const onDetectionFallback = vi.fn();
+    const noExecutableDifference = { ...input, acceptedCode: input.rejectedCode };
+    expect(parseSemanticAnalysis(JSON.stringify(semantic), noExecutableDifference, { onDetectionFallback })).toMatchObject({
       detection: { mode: "semantic" },
+    });
+    expect(onDetectionFallback).not.toHaveBeenCalled();
+  });
+
+  it("promotes semantic detection when the code supplies a safe executable difference", () => {
+    const semantic = structuredClone(validAnalysis);
+    semantic.detection = {
+      mode: "semantic",
+      semanticDescription: "A route is missing a repository feature gate.",
+      triggerSignals: [],
+      forbiddenSignals: [],
+      requiredSignals: [],
+      matchScope: "line",
+    };
+    const onDetectionFallback = vi.fn();
+    expect(parseSemanticAnalysis(JSON.stringify(semantic), input, { onDetectionFallback })).toMatchObject({
+      preferredSignals: ["requireFeature"],
+      detection: {
+        mode: "missing-required-signal",
+        triggerSignals: ["router.get"],
+        requiredSignals: ["requireFeature"],
+      },
+    });
+    expect(onDetectionFallback).toHaveBeenCalledWith({
+      reason: "semantic-executable-opportunity",
+      originalMode: "semantic",
+      replacementMode: "missing-required-signal",
     });
   });
 });

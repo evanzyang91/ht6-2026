@@ -24,7 +24,7 @@ export interface ExtractionResult {
   publishedRepositoryCount: number;
 }
 
-export const EXTRACTION_PIPELINE_VERSION = "2";
+export const EXTRACTION_PIPELINE_VERSION = "4";
 
 function errorChain(error: unknown): string {
   const messages: string[] = [];
@@ -102,13 +102,19 @@ export async function runConfiguredExtraction(
   const configuredAnalyzer = analyzer ?? createSemanticAnalyzerFromEnv(process.env, {
     onAttemptFailure: ({ attempt, maxAttempts, willRetry, error, input }) => {
       process.stderr.write(
-        `Freesolo attempt ${attempt}/${maxAttempts} failed for ${episodeLabel(input)}; `
+        `Semantic analyzer attempt ${attempt}/${maxAttempts} failed for ${episodeLabel(input)}; `
         + `${willRetry ? "retrying" : "no retries remain"}: ${errorChain(error)}\n`,
+      );
+    },
+    onDetectionFallback: ({ reason, originalMode, replacementMode, input }) => {
+      process.stderr.write(
+        `Semantic detection fallback for ${episodeLabel(input)}; reason=${reason}; `
+        + `mode=${JSON.stringify(originalMode)} -> ${replacementMode}; preserving Freesolo semantics\n`,
       );
     },
     onFallback: (error, input) => {
       process.stderr.write(
-        `Freesolo fallback for ${episodeLabel(input)}; using deterministic analysis: ${errorChain(error)}\n`,
+        `Semantic analyzer fallback for ${episodeLabel(input)}; using deterministic analysis: ${errorChain(error)}\n`,
       );
     },
   });

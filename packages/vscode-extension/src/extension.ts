@@ -151,8 +151,8 @@ class MemoryController implements vscode.Disposable {
   private safeguardSettings(): SafeguardSettings {
     const configuration = this.configuration();
     return {
-      minimumConfidence: configuration.get("minimumConfidence", 0.8),
-      minimumPullRequestSupport: configuration.get("minimumPullRequestSupport", 2),
+      minimumConfidence: configuration.get("minimumConfidence", 0.5),
+      minimumPullRequestSupport: configuration.get("minimumPullRequestSupport", 1),
       maximumDiagnosticsPerFile: configuration.get("maximumDiagnosticsPerFile", 5),
       mutedConventionIds: configuration.get<string[]>("mutedConventionIds", []),
     };

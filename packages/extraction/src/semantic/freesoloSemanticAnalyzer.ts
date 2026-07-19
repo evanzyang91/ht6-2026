@@ -1,5 +1,9 @@
 import type { SemanticAnalysis, SemanticAnalyzer, SemanticInput } from "./types.js";
-import { parseSemanticAnalysis, SemanticAnalysisValidationError } from "./semanticAnalysisValidation.js";
+import {
+  parseSemanticAnalysis,
+  SemanticAnalysisValidationError,
+  type SemanticDetectionFallback,
+} from "./semanticAnalysisValidation.js";
 
 export const ENGINEERING_MEMORY_SYSTEM_PROMPT = `You normalize one pull-request review episode into Engineering Memory JSON.
 Return raw JSON only, without Markdown fences or commentary. Use exactly these top-level fields: intent, title, rule, rationale, detection. intent must be one of actionable-change, architecture, testing, security, style, question-nonactionable. Every signal must be the smallest reusable exact code substring, never an English description or an entire code line when a stable identifier is available. detection must contain exactly mode, semanticDescription, triggerSignals, forbiddenSignals, requiredSignals, matchScope. mode must be forbidden-signal, missing-required-signal, or semantic; matchScope must be line or file. Use the English semanticDescription to explain the contextual condition and the signal arrays to encode deterministic detection. The application derives legacy preferredSignals and prohibitedSignals; do not return them.
@@ -24,6 +28,7 @@ export interface FreesoloSemanticAnalyzerOptions {
   fetch?: typeof globalThis.fetch;
   sleep?: (milliseconds: number) => Promise<void>;
   onAttemptFailure?: (event: FreesoloAttemptFailure) => void;
+  onDetectionFallback?: (event: FreesoloDetectionFallback) => void;
 }
 
 export interface FreesoloAttemptFailure {
@@ -31,6 +36,10 @@ export interface FreesoloAttemptFailure {
   maxAttempts: number;
   willRetry: boolean;
   error: unknown;
+  input: SemanticInput;
+}
+
+export interface FreesoloDetectionFallback extends SemanticDetectionFallback {
   input: SemanticInput;
 }
 
@@ -87,6 +96,7 @@ export class FreesoloSemanticAnalyzer implements SemanticAnalyzer {
   private readonly sleep: (milliseconds: number) => Promise<void>;
   private readonly semaphore: Semaphore;
   private readonly onAttemptFailure?: (event: FreesoloAttemptFailure) => void;
+  private readonly onDetectionFallback?: (event: FreesoloDetectionFallback) => void;
 
   constructor(options: FreesoloSemanticAnalyzerOptions) {
     this.url = endpoint(options.baseUrl);
@@ -101,6 +111,7 @@ export class FreesoloSemanticAnalyzer implements SemanticAnalyzer {
     this.sleep = options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
     this.semaphore = new Semaphore(positiveInteger(options.maxConcurrency, 4, "FREESOLO_MAX_CONCURRENCY"));
     this.onAttemptFailure = options.onAttemptFailure;
+    this.onDetectionFallback = options.onDetectionFallback;
   }
 
   async analyze(input: SemanticInput): Promise<SemanticAnalysis> {
@@ -169,7 +180,9 @@ export class FreesoloSemanticAnalyzer implements SemanticAnalyzer {
       const payload: unknown = await response.json();
       const content = isResponsePayload(payload) ? payload.choices[0]?.message?.content : undefined;
       if (typeof content !== "string") throw new Error("Freesolo response did not contain choices[0].message.content");
-      return parseSemanticAnalysis(content, input);
+      return parseSemanticAnalysis(content, input, {
+        onDetectionFallback: (event) => this.onDetectionFallback?.({ ...event, input }),
+      });
     } finally {
       clearTimeout(timeout);
     }

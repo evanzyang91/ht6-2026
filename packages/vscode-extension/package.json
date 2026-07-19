@@ -91,14 +91,14 @@
         },
         "engineeringMemory.minimumConfidence": {
           "type": "number",
-          "default": 0.8,
+          "default": 0.5,
           "minimum": 0,
           "maximum": 1,
           "description": "Minimum extraction confidence required for an editor warning."
         },
         "engineeringMemory.minimumPullRequestSupport": {
           "type": "integer",
-          "default": 2,
+          "default": 1,
           "minimum": 1,
           "description": "Minimum distinct supporting pull requests required for an editor warning."
         },

@@ -34,6 +34,10 @@ select {
   font: inherit;
 }
 
+a {
+  color: inherit;
+}
+
 .page-shell {
   width: min(1440px, 100%);
   min-height: 100vh;
@@ -72,6 +76,42 @@ footer {
   padding: 8px 10px;
   border-radius: 7px;
   background: #e9eae6;
+}
+
+.auth-link {
+  padding: 8px 12px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.auth-link.secondary {
+  background: #e9eae6;
+  color: var(--ink);
+}
+
+.connection-banner {
+  display: flex;
+  gap: 8px 18px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  border: 1px solid #cbdad3;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  font-size: 14px;
+}
+
+.connection-banner span {
+  color: var(--muted);
+}
+
+.connection-banner.error {
+  border-color: #e5c8c3;
+  background: #f8eae7;
 }
 
 h1,

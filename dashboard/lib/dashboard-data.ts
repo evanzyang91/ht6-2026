@@ -1,6 +1,10 @@
+import { readGitHubSession } from "./github-auth";
+
 export interface DashboardData {
   repository: string;
   source: "live" | "demo";
+  connection: "live" | "demo" | "authentication-required" | "api-error";
+  viewer?: { login: string; avatarUrl: string };
   summary: {
     commentsAnalyzed: number;
     pullRequests: number;
@@ -40,6 +44,7 @@ interface Convention {
 const demoData: DashboardData = {
   repository: "acme/api",
   source: "demo",
+  connection: "demo",
   summary: {
     commentsAnalyzed: 64,
     pullRequests: 38,
@@ -105,7 +110,11 @@ function initials(value: string): string {
     .join("") || "RV";
 }
 
-function deriveDashboardData(repository: string, conventions: Convention[]): DashboardData {
+function deriveDashboardData(
+  repository: string,
+  conventions: Convention[],
+  viewer: { login: string; avatarUrl: string },
+): DashboardData {
   const evidence = conventions.flatMap((item) => item.evidence);
   const pullRequests = new Set(evidence.map((item) => item.pullRequest));
   const reviewerCounts = new Map<string, number>();
@@ -122,6 +131,8 @@ function deriveDashboardData(repository: string, conventions: Convention[]): Das
   return {
     repository,
     source: "live",
+    connection: "live",
+    viewer,
     summary: {
       commentsAnalyzed: evidence.length,
       pullRequests: pullRequests.size,
@@ -155,8 +166,10 @@ function deriveDashboardData(repository: string, conventions: Convention[]): Das
 export async function loadDashboardData(): Promise<DashboardData> {
   const endpoint = process.env.ENGINEERING_MEMORY_API_URL;
   const repository = process.env.ENGINEERING_MEMORY_REPOSITORY;
-  const token = process.env.ENGINEERING_MEMORY_GITHUB_TOKEN;
-  if (!endpoint || !repository || !token) return demoData;
+  if (!endpoint || !repository) return demoData;
+  const session = await readGitHubSession();
+  if (!session) return { ...demoData, repository, connection: "authentication-required" };
+  const viewer = { login: session.login, avatarUrl: session.avatarUrl };
 
   const query = `
     query DashboardMemory($repository: String!) {
@@ -175,21 +188,21 @@ export async function loadDashboardData(): Promise<DashboardData> {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${token}`,
+        authorization: `Bearer ${session.accessToken}`,
       },
       body: JSON.stringify({ query, variables: { repository } }),
       cache: "no-store",
       signal: AbortSignal.timeout(8_000),
     });
-    if (!response.ok) return demoData;
+    if (!response.ok) return { ...demoData, repository, connection: "api-error", viewer };
     const payload = await response.json() as {
       data?: { repositoryMemory?: { repository: string; conventions: Convention[] } };
       errors?: unknown[];
     };
     const memory = payload.data?.repositoryMemory;
-    if (!memory || payload.errors?.length) return demoData;
-    return deriveDashboardData(memory.repository, memory.conventions);
+    if (!memory || payload.errors?.length) return { ...demoData, repository, connection: "api-error", viewer };
+    return deriveDashboardData(memory.repository, memory.conventions, viewer);
   } catch {
-    return demoData;
+    return { ...demoData, repository, connection: "api-error", viewer };
   }
 }
