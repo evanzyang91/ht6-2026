@@ -4,7 +4,6 @@ import {
   FallbackSemanticAnalyzer,
   ENGINEERING_MEMORY_SYSTEM_PROMPT,
   FreesoloSemanticAnalyzer,
-  SemanticAnalysisValidationError,
   createSemanticAnalyzerFromEnv,
   parseSemanticAnalysis,
 } from "../src/semantic/index.js";
@@ -24,8 +23,6 @@ const validAnalysis = {
   title: "Feature-flag public endpoints",
   rule: "New public endpoints must be protected by a feature flag.",
   rationale: "The accepted route adds the repository feature gate.",
-  prohibitedSignals: [],
-  preferredSignals: ["requireFeature"],
   detection: {
     mode: "missing-required-signal",
     semanticDescription: "A public endpoint is defined without its feature gate.",
@@ -55,18 +52,43 @@ describe("semantic response validation", () => {
       detection: { mode: "missing-required-signal" },
     });
     const invented = structuredClone(validAnalysis);
-    invented.preferredSignals = ["inventedFeatureGate"];
     invented.detection.requiredSignals = ["inventedFeatureGate"];
-    expect(() => parseSemanticAnalysis(JSON.stringify(invented), input)).toThrow(SemanticAnalysisValidationError);
+    expect(parseSemanticAnalysis(JSON.stringify(invented), input)).toMatchObject({
+      prohibitedSignals: [],
+      preferredSignals: [],
+      detection: { mode: "semantic" },
+    });
   });
 
-  it("rejects Markdown and inconsistent missing-required signals", () => {
+  it("rejects Markdown and canonicalizes legacy redundant signals", () => {
     expect(() => parseSemanticAnalysis(`\`\`\`json\n${JSON.stringify(validAnalysis)}\n\`\`\``, input)).toThrow(
       "raw JSON",
     );
-    const inconsistent = structuredClone(validAnalysis);
-    inconsistent.prohibitedSignals = ["router.get"];
-    expect(() => parseSemanticAnalysis(JSON.stringify(inconsistent), input)).toThrow("empty prohibitedSignals");
+    const legacy = { ...structuredClone(validAnalysis), prohibitedSignals: ["router.get"], preferredSignals: ["wrong"] };
+    expect(parseSemanticAnalysis(JSON.stringify(legacy), input)).toMatchObject({
+      prohibitedSignals: [],
+      preferredSignals: ["requireFeature"],
+      detection: { mode: "missing-required-signal" },
+    });
+  });
+
+  it("downgrades executable detection that would also reject the accepted fix", () => {
+    const unsafe = {
+      ...structuredClone(validAnalysis),
+      detection: {
+        mode: "forbidden-signal",
+        semanticDescription: "Routes are forbidden.",
+        triggerSignals: [],
+        forbiddenSignals: ["router.get"],
+        requiredSignals: [],
+        matchScope: "line",
+      },
+    };
+    expect(parseSemanticAnalysis(JSON.stringify(unsafe), input)).toMatchObject({
+      prohibitedSignals: [],
+      preferredSignals: [],
+      detection: { mode: "semantic" },
+    });
   });
 });
 
@@ -91,7 +113,7 @@ describe("FreesoloSemanticAnalyzer", () => {
     expect(body.messages).toHaveLength(2);
     expect(JSON.parse(body.messages[1].content)).toMatchObject({
       task: "analyze_review_episode",
-      version: "1",
+      version: "2",
       instruction: expect.any(String),
       episode: { repository: "acme/api", pullRequest: 310 },
     });

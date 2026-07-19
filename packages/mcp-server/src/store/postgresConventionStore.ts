@@ -1,4 +1,4 @@
-import type { CommentIntent, Convention } from "@ht6/shared";
+import type { CommentIntent, Convention, ConventionDetection } from "@ht6/shared";
 import { Pool } from "pg";
 import type { ConventionStore, StoredMemoryStatus } from "./conventionStore.js";
 
@@ -12,6 +12,7 @@ interface ConventionRow {
   languages: string[];
   prohibited_signals: string[];
   preferred_signals: string[];
+  detection: ConventionDetection | null;
   confidence: number;
   episode_key: string | null;
   pull_request: number | null;
@@ -48,7 +49,7 @@ export class PostgresConventionStore implements ConventionStore {
     const result = await this.pool.query<ConventionRow>(`
       SELECT
         c.convention_key, c.title, c.rule, c.rationale, c.category::text,
-        c.path_scopes, c.languages, c.prohibited_signals, c.preferred_signals,
+        c.path_scopes, c.languages, c.prohibited_signals, c.preferred_signals, c.detection,
         c.confidence,
         e.episode_key, e.pull_request, e.reviewer, e.file_path,
         e.review_comment, e.rejected_code, e.accepted_code
@@ -76,6 +77,7 @@ export class PostgresConventionStore implements ConventionStore {
           languages: row.languages,
           prohibitedSignals: row.prohibited_signals,
           preferredSignals: row.preferred_signals,
+          detection: row.detection ?? undefined,
           confidence: row.confidence,
           supportingEpisodes: [],
           evidence: [],

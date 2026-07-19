@@ -60,9 +60,19 @@ const typeDefs = /* GraphQL */ `
     languages: [String!]!
     prohibitedSignals: [String!]!
     preferredSignals: [String!]!
+    detection: ConventionDetection
     confidence: Float!
     supportingEpisodes: [ID!]!
     evidence: [ConventionEvidence!]!
+  }
+
+  type ConventionDetection {
+    mode: String!
+    semanticDescription: String!
+    triggerSignals: [String!]!
+    forbiddenSignals: [String!]!
+    requiredSignals: [String!]!
+    matchScope: String!
   }
 
   type RepositoryMemory {

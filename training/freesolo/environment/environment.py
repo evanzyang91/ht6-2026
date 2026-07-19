@@ -22,9 +22,7 @@ from freesolo.environments import EnvironmentSingleTurn, RewardResult
 DEFAULT_DATASET_PATH = Path(__file__).parent / "dataset" / "train.jsonl"
 SYSTEM_PROMPT = (Path(__file__).parent / "system-prompt.txt").read_text().strip()
 
-TOP_LEVEL_KEYS = {
-    "intent", "title", "rule", "rationale", "prohibitedSignals", "preferredSignals", "detection"
-}
+TOP_LEVEL_KEYS = {"intent", "title", "rule", "rationale", "detection"}
 DETECTION_KEYS = {
     "mode", "semanticDescription", "triggerSignals", "forbiddenSignals", "requiredSignals", "matchScope"
 }
@@ -59,9 +57,6 @@ def parse_contract_json(response_text: str):
         return None
     if detection.get("mode") not in DETECTION_MODES or detection.get("matchScope") not in {"line", "file"}:
         return None
-    for key in ("prohibitedSignals", "preferredSignals"):
-        if not isinstance(value.get(key), list) or not all(isinstance(item, str) for item in value[key]):
-            return None
     for key in ("triggerSignals", "forbiddenSignals", "requiredSignals"):
         if not isinstance(detection.get(key), list) or not all(isinstance(item, str) for item in detection[key]):
             return None

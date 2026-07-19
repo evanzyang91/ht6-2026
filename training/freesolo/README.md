@@ -1,8 +1,8 @@
-# Freesolo SFT smoke dataset
+# Freesolo SFT dataset
 
-This directory provides synthetic data for verifying the Freesolo training workflow before real
-GitHub review history is available. It is deliberately too small and synthetic for a production
-adapter.
+This directory provides reviewed executable examples plus conservative semantic-only examples from
+real GitHub review history. Medium-linkage real episodes are never assigned executable signals that
+the accepted patch does not prove.
 
 ## Contract being trained
 
@@ -14,8 +14,12 @@ SemanticInput
   repository, pullRequest, filePath, reviewComment, rejectedCode, acceptedCode?, codeContext?
 
 -> SemanticAnalysis
-  intent, title, rule, rationale, prohibitedSignals, preferredSignals, detection
+  intent, title, rule, rationale, detection
 ```
+
+The model returns the non-redundant v2 contract. Extraction derives legacy `prohibitedSignals` from
+`detection.forbiddenSignals` and `preferredSignals` from `detection.requiredSignals` so a model
+cannot contradict itself by returning the same fact twice.
 
 `detection.semanticDescription` stores the English contextual condition. Exact trigger, forbidden,
 and required signal arrays drive deterministic validation. Modes distinguish code that is forbidden
@@ -37,23 +41,23 @@ From the repository root:
 
 ```bash
 npm run freesolo:mock-data
-wc -l training/freesolo/datasets/*.jsonl
-head -n 1 training/freesolo/datasets/train.jsonl
+wc -l training/freesolo/environment/dataset/*.jsonl
+head -n 1 training/freesolo/environment/dataset/train.jsonl
 ```
 
-Expected sizes are 18 training rows and 6 held-out evaluation rows. Each JSONL object contains an
+Expected sizes are 45 training rows and 16 held-out evaluation rows. Training is balanced across
+15 forbidden-signal, 15 missing-required-signal, and 15 semantic targets. Each JSONL object contains an
 `input` string and an `output` string. Both strings contain JSON so the trained model learns a strict
 machine-readable response.
 
 ## Freesolo setup order
 
-It is safe to install the CLI, log in, and scaffold an environment before real data exists. Do not
-pay for or submit a meaningful training run yet.
+It is safe to install the CLI, log in, and scaffold the environment before refreshing the dataset.
 
 1. Install and authenticate using the commands shown in the Freesolo dashboard.
 2. Run `flash env setup` in a separate Freesolo environment directory.
-3. Copy this directory's `datasets/train.jsonl` and `datasets/eval.jsonl` into the generated
-   environment's dataset directory, preserving the names expected by its generated `environment.py`.
+3. Run `npm run freesolo:build-dataset` from the repository root to refresh the checked-in
+   environment's train/eval files.
 4. Run the environment's local validation or Freesolo dry run.
 5. Use a cost preview before submitting a training run.
 
@@ -171,13 +175,13 @@ flash undeploy "$TRAINED_RUN_ID"
 With deterministic fallback enabled, extraction remains available after undeploying but no longer
 uses the trained adapter.
 
-## Replacing mock data
+## Expanding the dataset
 
-Once ingestion and accepted-fix linking work, generate rows from `data/episodes.json`. Use the six
-core `SemanticInput` fields plus `codeContext` as input and replace `semanticAnalysis` with a
+As more reviewed data becomes available, generate rows from `data/episodes.json`. Use the six core
+`SemanticInput` fields plus `codeContext` as input and replace `semanticAnalysis` with a
 human-approved target. Split by
 convention family, repository, or time—not randomly by individual comment—to prevent near-duplicate
 review patterns leaking into evaluation.
 
-Never use synthetic evaluation data to claim model quality. The mock set checks formatting,
-training, deployment, and JSON parsing only.
+Do not use the synthetic portion alone to claim model quality. Report executable behavioral replay
+separately from the held-out real semantic-only examples.
