@@ -9,7 +9,6 @@ export interface SidebarController {
   initializeRepository(): Promise<void>;
   syncNow(): Promise<void>;
   showCurrentMemory(): Promise<void>;
-  showOutputLog(): void;
 }
 
 export class EngineeringMemorySidebarProvider implements vscode.WebviewViewProvider {
@@ -45,9 +44,6 @@ export class EngineeringMemorySidebarProvider implements vscode.WebviewViewProvi
         break;
       case "showMemory":
         await this.controller.showCurrentMemory();
-        break;
-      case "openLog":
-        this.controller.showOutputLog();
         break;
       default:
         return;

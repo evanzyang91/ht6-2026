@@ -7,8 +7,8 @@ const base: SidebarSnapshot = {
   signedIn: true,
   apiUrl: "http://127.0.0.1:8790/graphql",
   repository: "acme/api",
-  status: "ready",
-  conventionCount: 12,
+  status: "empty",
+  conventionCount: 0,
   lastSyncAt: Date.parse("2026-01-01T00:00:00Z"),
   lastSyncCommentCount: 40,
 };
@@ -29,20 +29,35 @@ it("prompts to sign in to GitHub when no session is present", () => {
 it("labels the initialize button 'Retry Setup' when setup previously failed", () => {
   const html = renderSidebarHtml({ ...base, status: "failed", lastError: "GitHub token expired" }, "nonce");
   expect(html).toContain("Retry Setup");
-  expect(html).not.toContain(">Initialize Repository Memory<");
+  expect(html).not.toContain("Initialize Repository Memory");
   expect(html).toContain("GitHub token expired");
 });
 
-it("labels the initialize button 'Initialize Repository Memory' otherwise", () => {
+it("labels the initialize button 'Initialize Repository Memory' and keeps it enabled when not yet synced", () => {
   const html = renderSidebarHtml(base, "nonce");
-  expect(html).toContain("Initialize Repository Memory");
+  expect(html).toContain(">Initialize Repository Memory<");
   expect(html).not.toContain("Retry Setup");
+  const initializeButton = html.match(/<button data-command="initialize"[^>]*>/)?.[0] ?? "";
+  expect(initializeButton).not.toContain("disabled");
 });
 
-it("always offers to open the output log, even with no folder open", () => {
+it("grays out (disables) the initialize button once the repository is already synced and ready", () => {
+  const html = renderSidebarHtml({ ...base, status: "ready", conventionCount: 12 }, "nonce");
+  const initializeButton = html.match(/<button data-command="initialize"[^>]*>/)?.[0] ?? "";
+  expect(initializeButton).toContain("disabled");
+  expect(html).toContain("up to date");
+});
+
+it("no longer renders a separate output-log button — Show Current Memory covers it", () => {
+  const html = renderSidebarHtml(base, "nonce");
+  expect(html).not.toContain('data-command="openLog"');
+  expect(html).toContain('data-command="showMemory"');
+});
+
+it("renders no action buttons when no folder is open", () => {
   const html = renderSidebarHtml({ hasFolder: false, trusted: false, signedIn: false, apiUrl: "" }, "nonce");
-  expect(html).toContain('data-command="openLog"');
-  expect(html).not.toContain('data-command="trustWorkspace"');
+  expect(html).not.toContain("data-command=");
+  expect(html).toContain("No folder open");
 });
 
 it("escapes repository names and errors before embedding them in HTML", () => {

@@ -42,6 +42,15 @@ function statusLabel(snapshot: SidebarSnapshot): { text: string; tone: "ok" | "w
   }
 }
 
+function badgeWord(tone: "ok" | "warn" | "error" | "muted"): string {
+  switch (tone) {
+    case "ok": return "Ready";
+    case "warn": return "Working";
+    case "error": return "Action needed";
+    case "muted": return "Not set up";
+  }
+}
+
 function formatLastSync(snapshot: SidebarSnapshot): string {
   if (!snapshot.lastSyncAt) return "Never";
   const when = new Date(snapshot.lastSyncAt).toLocaleTimeString();
@@ -52,8 +61,10 @@ function row(label: string, valueHtml: string, tone: "ok" | "warn" | "error" | "
   return `<div class="row"><span class="dot ${tone}"></span><span class="row-label">${escapeHtml(label)}</span><span class="row-value">${valueHtml}</span></div>`;
 }
 
-function button(command: string, text: string, primary = false): string {
-  return `<button data-command="${escapeHtml(command)}" class="${primary ? "primary" : "secondary"}">${escapeHtml(text)}</button>`;
+type ButtonVariant = "danger" | "accent" | "warn" | "neutral";
+
+function button(command: string, text: string, variant: ButtonVariant, disabled = false): string {
+  return `<button data-command="${escapeHtml(command)}" class="btn-${variant}"${disabled ? " disabled" : ""}>${escapeHtml(text)}</button>`;
 }
 
 /** Pure HTML rendering, decoupled from `vscode` so it's directly unit-testable. */
@@ -71,7 +82,7 @@ export function renderSidebarHtml(snapshot: SidebarSnapshot, nonce: string): str
     heroTone = "error";
     heroHeadline = "Workspace not trusted";
     heroDetail = "Trust this workspace to enable Engineering Memory.";
-    buttons.push(button("trustWorkspace", "Trust Workspace…", true));
+    buttons.push(button("trustWorkspace", "Trust Workspace…", "danger"));
   } else {
     const memory = statusLabel(snapshot);
     heroTone = memory.tone;
@@ -83,14 +94,18 @@ export function renderSidebarHtml(snapshot: SidebarSnapshot, nonce: string): str
       : `<span class="error">${escapeHtml(snapshot.repositoryError ?? "Not detected")}</span>`, snapshot.repository ? "ok" : "error"));
 
     rows.push(row("GitHub", snapshot.signedIn ? "Signed in" : "Not signed in", snapshot.signedIn ? "ok" : "muted"));
-    if (!snapshot.signedIn) buttons.push(button("signIn", "Sign in to GitHub…", true));
+    if (!snapshot.signedIn) buttons.push(button("signIn", "Sign in to GitHub…", "accent"));
 
-    buttons.push(button("initialize", snapshot.status === "failed" ? "Retry Setup" : "Initialize Repository Memory"));
-    buttons.push(button("syncNow", "Sync Now"));
-    buttons.push(button("showMemory", "Show Current Memory"));
+    const alreadySynced = snapshot.status === "ready";
+    buttons.push(button(
+      "initialize",
+      snapshot.status === "failed" ? "Retry Setup" : alreadySynced ? "Initialize Repository Memory (up to date)" : "Initialize Repository Memory",
+      "warn",
+      alreadySynced,
+    ));
+    buttons.push(button("syncNow", "Sync Now", "neutral"));
+    buttons.push(button("showMemory", "Show Current Memory & Log", "neutral"));
   }
-
-  buttons.push(button("openLog", "Open Output Log"));
 
   return `<!doctype html>
 <html>
@@ -107,29 +122,28 @@ export function renderSidebarHtml(snapshot: SidebarSnapshot, nonce: string): str
     margin: 0;
   }
   .hero {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 12px;
+    padding: 14px;
     border-radius: 8px;
-    background: var(--vscode-textBlockQuote-background, var(--vscode-editorWidget-background));
-    border-left: 3px solid var(--hero-accent, var(--vscode-panel-border));
-    margin-bottom: 14px;
+    background: var(--vscode-sideBarSectionHeader-background, var(--vscode-editorWidget-background));
+    border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+    margin-bottom: 16px;
   }
-  .hero.ok { --hero-accent: var(--vscode-testing-iconPassed, #3fb950); }
-  .hero.warn { --hero-accent: var(--vscode-editorWarning-foreground); }
-  .hero.error { --hero-accent: var(--vscode-errorForeground); }
-  .hero.muted { --hero-accent: var(--vscode-descriptionForeground); }
-  .hero-dot {
-    flex-shrink: 0;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    margin-top: 4px;
-    background: var(--hero-accent);
+  .hero-badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 10px;
+    font-size: 0.72em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 9px;
   }
+  .hero-badge.tone-ok { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+  .hero-badge.tone-warn { background: var(--vscode-statusBarItem-warningBackground); color: var(--vscode-statusBarItem-warningForeground); }
+  .hero-badge.tone-error { background: var(--vscode-statusBarItem-errorBackground); color: var(--vscode-statusBarItem-errorForeground); }
+  .hero-badge.tone-muted { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
   .hero-headline { font-weight: 600; line-height: 1.4; }
-  .hero-detail { color: var(--vscode-descriptionForeground); font-size: 0.92em; margin-top: 2px; }
+  .hero-detail { color: var(--vscode-descriptionForeground); font-size: 0.9em; margin-top: 3px; }
   .section-title {
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -164,29 +178,46 @@ export function renderSidebarHtml(snapshot: SidebarSnapshot, nonce: string): str
     border-radius: 6px;
     cursor: pointer;
     text-align: center;
-    transition: background 0.1s ease-in-out;
+    font-weight: 500;
+    transition: filter 0.1s ease-in-out, background 0.1s ease-in-out;
   }
-  button.secondary {
-    background: transparent;
-    color: var(--vscode-foreground);
-    border-color: var(--vscode-button-border, var(--vscode-panel-border));
+  button:disabled {
+    cursor: not-allowed;
+    pointer-events: none;
+    background: var(--vscode-button-secondaryBackground, var(--vscode-badge-background));
+    color: var(--vscode-descriptionForeground);
   }
-  button.secondary:hover { background: var(--vscode-toolbar-hoverBackground); }
-  button.primary {
+  /* Blocking prerequisite — must fix before anything else works. */
+  .btn-danger {
+    background: var(--vscode-statusBarItem-errorBackground);
+    color: var(--vscode-statusBarItem-errorForeground);
+  }
+  .btn-danger:hover { filter: brightness(1.15); }
+  /* Primary call to action. */
+  .btn-accent {
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
-    font-weight: 500;
   }
-  button.primary:hover { background: var(--vscode-button-hoverBackground); }
+  .btn-accent:hover { background: var(--vscode-button-hoverBackground); }
+  /* One-time setup action. */
+  .btn-warn {
+    background: var(--vscode-statusBarItem-warningBackground);
+    color: var(--vscode-statusBarItem-warningForeground);
+  }
+  .btn-warn:hover { filter: brightness(1.1); }
+  /* Routine, repeatable action. */
+  .btn-neutral {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+  }
+  .btn-neutral:hover { background: var(--vscode-button-secondaryHoverBackground); }
 </style>
 </head>
 <body>
-  <div class="hero ${heroTone}">
-    <span class="hero-dot"></span>
-    <div>
-      <div class="hero-headline">${escapeHtml(heroHeadline)}</div>
-      <div class="hero-detail">${escapeHtml(heroDetail)}</div>
-    </div>
+  <div class="hero">
+    <span class="hero-badge tone-${heroTone}">${escapeHtml(badgeWord(heroTone))}</span>
+    <div class="hero-headline">${escapeHtml(heroHeadline)}</div>
+    <div class="hero-detail">${escapeHtml(heroDetail)}</div>
   </div>
   ${rows.length ? `<div class="section-title">Details</div><div class="rows">${rows.join("")}</div>` : ""}
   <div class="section-title">Actions</div>

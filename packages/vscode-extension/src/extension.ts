@@ -392,10 +392,6 @@ class MemoryController implements vscode.Disposable {
     }
   }
 
-  showOutputLog(): void {
-    this.output.show(true);
-  }
-
   /** Read-only status snapshot for the sidebar webview — never triggers ingestion or extraction. */
   async getSidebarSnapshot(): Promise<SidebarSnapshot> {
     const apiUrl = this.configuration().get<string>("apiUrl", "").trim();
