@@ -75,6 +75,15 @@ const typeDefs = /* GraphQL */ `
     evidence: [ConventionEvidence!]!
   }
 
+  type ConventionDetection {
+    mode: String!
+    semanticDescription: String!
+    triggerSignals: [String!]!
+    forbiddenSignals: [String!]!
+    requiredSignals: [String!]!
+    matchScope: String!
+  }
+
   type RepositoryMemory {
     repository: String!
     status: RepositoryMemoryStatus!

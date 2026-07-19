@@ -59,12 +59,11 @@ try {
 }
 
 if (actual) {
-  const expectedKeys = ["intent", "title", "rule", "rationale", "prohibitedSignals", "preferredSignals", "detection"].sort();
+  const expectedKeys = ["intent", "title", "rule", "rationale", "detection"].sort();
   if (JSON.stringify(Object.keys(actual).sort()) !== JSON.stringify(expectedKeys)) failures.push("top-level keys do not match the contract");
-  for (const key of ["intent", "prohibitedSignals", "preferredSignals"]) {
+  for (const key of ["intent"]) {
     if (JSON.stringify(actual[key]) !== JSON.stringify(expected[key])) {
-      if (key === "preferredSignals") warnMismatch(key, actual[key], expected[key]);
-      else mismatch(key, actual[key], expected[key]);
+      mismatch(key, actual[key], expected[key]);
     }
   }
   const detectionKeys = ["mode", "semanticDescription", "triggerSignals", "forbiddenSignals", "requiredSignals", "matchScope"].sort();
@@ -90,9 +89,9 @@ if (actual) {
       if (!rejectsReviewedCode) failures.push("behavioral replay did not detect rejectedCode");
       if (episode.acceptedCode && rejectsAcceptedCode) failures.push("behavioral replay falsely detected acceptedCode");
     }
-    for (const signal of actual.preferredSignals ?? []) {
+    for (const signal of actual.detection.requiredSignals ?? []) {
       if (episode.acceptedCode && !includesSignal(episode.acceptedCode, signal)) {
-        failures.push(`preferred signal is not present in acceptedCode: ${JSON.stringify(signal)}`);
+        failures.push(`required signal is not present in acceptedCode: ${JSON.stringify(signal)}`);
       }
     }
   }

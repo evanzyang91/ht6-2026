@@ -1,14 +1,14 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const outputDirectory = resolve(root, "training/freesolo/datasets");
+const outputDirectory = resolve(root, "training/freesolo/environment/dataset");
 
 const systemInstruction = [
-  "Normalize one pull-request review episode into the Engineering Memory SemanticAnalysis schema.",
+  "Normalize one pull-request review episode into the Engineering Memory SemanticAnalysis v2 schema.",
   "Use only the supplied evidence and return raw JSON without Markdown. Return exactly: intent,",
-  "title, rule, rationale, prohibitedSignals, preferredSignals, detection. intent must be one of",
+  "title, rule, rationale, detection. intent must be one of",
   "actionable-change, architecture, testing, security, style, question-nonactionable. Signals must",
   "be exact code substrings, never English descriptions. detection contains mode, semanticDescription,",
   "triggerSignals, forbiddenSignals, requiredSignals, matchScope. Use forbidden-signal when code is",
@@ -16,8 +16,8 @@ const systemInstruction = [
   "and semantic only when deterministic signals cannot represent the condition. Use codeContext to",
   "understand the enclosing symbol and imports, but do not invent repository facts. When acceptedCode",
   "adds a guard, middleware, wrapper, modifier, await, mock, or helper missing from rejectedCode, use",
-  "missing-required-signal; keep prohibitedSignals and forbiddenSignals empty, set preferredSignals",
-  "equal to requiredSignals, and never mark the trigger itself forbidden. Use forbidden-signal only",
+  "missing-required-signal; keep forbiddenSignals empty and never mark the trigger itself forbidden.",
+  "The application derives legacy preferredSignals and prohibitedSignals; do not return them. Use forbidden-signal only",
   "when acceptedCode removes or replaces a disallowed construct. Prefer the smallest reusable exact",
   "substring over an entire code line. Treat feature flags as architecture/release-control conventions.",
 ].join(" ");
@@ -67,11 +67,17 @@ function row(input, output, detection) {
   return {
     input: JSON.stringify({
       task: "analyze_review_episode",
-      version: "1",
+      version: "2",
       instruction: systemInstruction,
       episode: { ...input, codeContext: input.codeContext ?? mockCodeContext(input) },
     }),
-    output: JSON.stringify({ ...output, detection: resolvedDetection }),
+    output: JSON.stringify({
+      intent: output.intent,
+      title: output.title,
+      rule: output.rule,
+      rationale: output.rationale,
+      detection: resolvedDetection,
+    }),
   };
 }
 
@@ -187,10 +193,133 @@ const evaluation = [
   ),
 ];
 
+const additionalExecutable = [
+  row(
+    { repository: "acme/api", pullRequest: 401, filePath: "src/controllers/account.py", reviewComment: "Views must not query the session directly; use AccountService.", rejectedCode: "account = db.session.query(Account).get(account_id)", acceptedCode: "account = account_service.get(account_id)" },
+    { intent: "architecture", title: "Keep database sessions out of views", rule: "HTTP views must delegate persistence to services.", rationale: "The accepted view delegates account lookup to the service.", prohibitedSignals: ["db.session.query"], preferredSignals: ["account_service.get"] },
+  ),
+  row(
+    { repository: "acme/web", pullRequest: 402, filePath: "src/pages/Teams.tsx", reviewComment: "Server state should use React Query rather than fetch in an effect.", rejectedCode: "useEffect(() => { fetch('/api/teams').then(loadTeams) }, [])", acceptedCode: "const teams = useQuery({ queryKey: ['teams'], queryFn: getTeams })" },
+    { intent: "architecture", title: "Use React Query for teams", rule: "Components must use React Query for server state.", rationale: "The accepted component replaces effect-based fetching with useQuery.", prohibitedSignals: ["useEffect", "fetch"], preferredSignals: ["useQuery"] },
+  ),
+  row(
+    { repository: "acme/platform", pullRequest: 403, filePath: "src/auth/session.ts", reviewComment: "Do not log session secrets.", rejectedCode: "logger.info('session created', { sessionToken })", acceptedCode: "logger.info('session created', { sessionId })" },
+    { intent: "security", title: "Do not log session tokens", rule: "Session tokens must not be written to logs.", rationale: "The accepted log uses a non-secret session identifier.", prohibitedSignals: ["sessionToken"], preferredSignals: ["sessionId"] },
+    forbiddenDetection("A session token is passed to a logger.", ["sessionToken"], ["logger.info"]),
+  ),
+  row(
+    { repository: "acme/api", pullRequest: 404, filePath: "src/repositories/user.py", reviewComment: "Do not build SQL by concatenating the user ID.", rejectedCode: "cursor.execute('SELECT * FROM users WHERE id=' + user_id)", acceptedCode: "cursor.execute('SELECT * FROM users WHERE id=%s', (user_id,))" },
+    { intent: "security", title: "Parameterize SQL queries", rule: "Repository queries must use bound SQL parameters.", rationale: "The accepted query binds the user identifier separately.", prohibitedSignals: ["+ user_id"], preferredSignals: ["%s"] },
+  ),
+  row(
+    { repository: "acme/platform", pullRequest: 405, filePath: "Dockerfile", reviewComment: "Pin the runtime image instead of using latest.", rejectedCode: "FROM node:latest", acceptedCode: "FROM node:22.4-alpine" },
+    { intent: "architecture", title: "Pin runtime image versions", rule: "Production container images must use an explicit version.", rationale: "The accepted Dockerfile replaces latest with a pinned runtime version.", prohibitedSignals: ["node:latest"], preferredSignals: ["node:22.4-alpine"] },
+  ),
+  row(
+    { repository: "acme/api", pullRequest: 406, filePath: "src/routes/admin.ts", reviewComment: "Admin routes require the admin authorization middleware.", rejectedCode: "router.get('/admin', adminController)", acceptedCode: "router.get('/admin', requireAdmin, adminController)" },
+    { intent: "security", title: "Authorize admin routes", rule: "Administrative routes must apply admin authorization middleware.", rationale: "The accepted route adds requireAdmin before the controller.", prohibitedSignals: [], preferredSignals: ["requireAdmin"] },
+    requiredDetection("An admin route is registered without admin authorization.", ["adminController"], ["requireAdmin"]),
+  ),
+  row(
+    { repository: "acme/api", pullRequest: 407, filePath: "src/routes/billing.ts", reviewComment: "Gate the new billing endpoint behind its feature flag.", rejectedCode: "router.post('/billing', billingController)", acceptedCode: "router.post('/billing', requireFeature('billing'), billingController)" },
+    { intent: "architecture", title: "Feature-flag billing routes", rule: "New billing routes must apply the billing feature gate.", rationale: "The accepted route adds the billing feature gate.", prohibitedSignals: [], preferredSignals: ["requireFeature"] },
+    requiredDetection("A billing route is registered without its feature gate.", ["billingController"], ["requireFeature"]),
+  ),
+  row(
+    { repository: "acme/web", pullRequest: 408, filePath: "src/routes/profile.ts", reviewComment: "State-changing browser routes need CSRF verification.", rejectedCode: "router.post('/profile', updateProfile)", acceptedCode: "router.post('/profile', verifyCsrf, updateProfile)" },
+    { intent: "security", title: "Verify CSRF on profile updates", rule: "State-changing browser routes must verify CSRF tokens.", rationale: "The accepted route adds verifyCsrf.", prohibitedSignals: [], preferredSignals: ["verifyCsrf"] },
+    requiredDetection("A profile update route lacks CSRF verification.", ["updateProfile"], ["verifyCsrf"]),
+  ),
+  row(
+    { repository: "acme/api", pullRequest: 409, filePath: "src/services/transfer.ts", reviewComment: "Debit and credit must be in one transaction.", rejectedCode: "await debit(account); await credit(target)", acceptedCode: "await database.transaction(async tx => { await debit(account, tx); await credit(target, tx) })" },
+    { intent: "architecture", title: "Make transfers transactional", rule: "Coupled debit and credit writes must share a transaction.", rationale: "The accepted implementation wraps both writes in one transaction.", prohibitedSignals: [], preferredSignals: ["database.transaction"] },
+    requiredDetection("Coupled transfer writes occur without a shared transaction.", ["debit", "credit"], ["database.transaction"], "file"),
+  ),
+  row(
+    { repository: "acme/platform", pullRequest: 410, filePath: "src/jobs/reconcile.ts", reviewComment: "Await the reconciliation write before completing the job.", rejectedCode: "repository.save(result); return done()", acceptedCode: "await repository.save(result); return done()" },
+    { intent: "actionable-change", title: "Await reconciliation writes", rule: "Job persistence must finish before completion is returned.", rationale: "The accepted job awaits repository.save.", prohibitedSignals: [], preferredSignals: ["await repository.save"] },
+    requiredDetection("A reconciliation write is not awaited.", ["repository.save"], ["await repository.save"]),
+  ),
+  row(
+    { repository: "acme/web", pullRequest: 411, filePath: "src/hooks/useExpiry.test.ts", reviewComment: "Fix the clock before testing expiry behavior.", rejectedCode: "expect(isExpired(new Date())).toBe(true)", acceptedCode: "vi.setSystemTime(expiredAt); expect(isExpired(new Date())).toBe(true)" },
+    { intent: "testing", title: "Fix time in expiry tests", rule: "Time-dependent tests must control the system clock.", rationale: "The accepted test fixes system time before the assertion.", prohibitedSignals: [], preferredSignals: ["vi.setSystemTime"] },
+    requiredDetection("An expiry test depends on wall-clock time.", ["isExpired"], ["vi.setSystemTime"], "file"),
+  ),
+  row(
+    { repository: "acme/web", pullRequest: 412, filePath: "src/components/Viewer.test.tsx", reviewComment: "Install the GraphQL mock before rendering.", rejectedCode: "render(<Viewer />)", acceptedCode: "server.use(graphql.query('Viewer', viewerHandler)); render(<Viewer />)" },
+    { intent: "testing", title: "Mock Viewer GraphQL requests", rule: "Component tests must install GraphQL handlers for network operations.", rationale: "The accepted test installs the Viewer query handler.", prohibitedSignals: [], preferredSignals: ["server.use"] },
+    requiredDetection("A Viewer component test renders without its GraphQL mock.", ["render(<Viewer"], ["server.use"], "file"),
+  ),
+  row(
+    { repository: "acme/api", pullRequest: 413, filePath: "src/routes/search.ts", reviewComment: "Validate the query before invoking search.", rejectedCode: "return searchService.find(req.query)", acceptedCode: "const query = searchSchema.parse(req.query); return searchService.find(query)" },
+    { intent: "security", title: "Validate search queries", rule: "Search routes must validate request queries before using them.", rationale: "The accepted route parses the query with searchSchema.", prohibitedSignals: [], preferredSignals: ["searchSchema.parse"] },
+    requiredDetection("Search is invoked with an unvalidated request query.", ["searchService.find"], ["searchSchema.parse"], "file"),
+  ),
+  row(
+    { repository: "acme/api", pullRequest: 414, filePath: "src/routes/login.ts", reviewComment: "Apply the login rate limiter here.", rejectedCode: "router.post('/login', loginController)", acceptedCode: "router.post('/login', loginRateLimit, loginController)" },
+    { intent: "security", title: "Rate-limit login routes", rule: "Login routes must apply the repository rate limiter.", rationale: "The accepted route adds loginRateLimit.", prohibitedSignals: [], preferredSignals: ["loginRateLimit"] },
+    requiredDetection("A login route is registered without rate limiting.", ["loginController"], ["loginRateLimit"]),
+  ),
+  row(
+    { repository: "acme/api", pullRequest: 415, filePath: "src/repositories/orders.ts", reviewComment: "Tenant-scoped reads must include tenantId.", rejectedCode: "return prisma.order.findMany({ where: { status } })", acceptedCode: "return prisma.order.findMany({ where: { tenantId, status } })" },
+    { intent: "security", title: "Scope order reads by tenant", rule: "Order queries must include the current tenant identifier.", rationale: "The accepted query adds tenantId to its filter.", prohibitedSignals: [], preferredSignals: ["tenantId"] },
+    requiredDetection("An order query is issued without a tenant filter.", ["prisma.order.findMany"], ["tenantId"], "file"),
+  ),
+  row(
+    { repository: "acme/api", pullRequest: 416, filePath: "src/routes/payments.ts", reviewComment: "Payment creation needs the idempotency middleware.", rejectedCode: "router.post('/payments', createPayment)", acceptedCode: "router.post('/payments', requireIdempotencyKey, createPayment)" },
+    { intent: "architecture", title: "Require payment idempotency", rule: "Payment creation routes must require an idempotency key.", rationale: "The accepted route adds requireIdempotencyKey.", prohibitedSignals: [], preferredSignals: ["requireIdempotencyKey"] },
+    requiredDetection("A payment creation route lacks idempotency protection.", ["createPayment"], ["requireIdempotencyKey"]),
+  ),
+  row(
+    { repository: "acme/web", pullRequest: 417, filePath: "src/components/IconButton.tsx", reviewComment: "Icon-only buttons need an accessible label.", rejectedCode: "<button onClick={save}><SaveIcon /></button>", acceptedCode: "<button aria-label='Save' onClick={save}><SaveIcon /></button>" },
+    { intent: "actionable-change", title: "Label icon-only buttons", rule: "Icon-only buttons must provide an accessible label.", rationale: "The accepted button adds aria-label.", prohibitedSignals: [], preferredSignals: ["aria-label"] },
+    requiredDetection("An icon-only save button has no accessible label.", ["SaveIcon"], ["aria-label"]),
+  ),
+];
+
+const realEpisodes = JSON.parse(await readFile(resolve(root, "packages/api-server/data/episodes.json"), "utf8"));
+const eligibleRealEpisodes = realEpisodes
+  .filter((episode) => episode.acceptedFixQuality === "medium" && episode.reviewComment && episode.rejectedCode)
+  .sort((left, right) => left.id.localeCompare(right.id));
+
+function semanticOnlyRealRow(episode) {
+  const input = {
+    repository: episode.repository,
+    pullRequest: episode.pullRequest,
+    filePath: episode.filePath,
+    reviewComment: episode.reviewComment,
+    rejectedCode: episode.rejectedCode,
+    acceptedCode: episode.acceptedCode,
+    ...(episode.codeContext ? { codeContext: episode.codeContext } : {}),
+  };
+  const semantic = episode.semanticAnalysis ?? {};
+  const title = String(semantic.title || episode.reviewComment.split(/[.!?]/)[0] || "Repository review guidance").slice(0, 100);
+  return {
+    input: JSON.stringify({
+      task: "analyze_review_episode",
+      version: "2",
+      instruction: systemInstruction,
+      episode: input,
+    }),
+    output: JSON.stringify({
+      intent: semantic.intent || episode.intent || "actionable-change",
+      title,
+      rule: semantic.rule || episode.reviewComment,
+      rationale: "The linked merged code does not isolate a safe exact signal, so this review remains semantic-only.",
+      detection: semanticDetection(semantic.rule || episode.reviewComment),
+    }),
+  };
+}
+
+const realTraining = eligibleRealEpisodes.slice(0, 10).map(semanticOnlyRealRow);
+const realEvaluation = eligibleRealEpisodes.slice(10, 20).map(semanticOnlyRealRow);
+const completeTraining = [...train, ...additionalExecutable, ...realTraining];
+const completeEvaluation = [...evaluation, ...realEvaluation];
+
 await mkdir(outputDirectory, { recursive: true });
 await Promise.all([
-  writeFile(resolve(outputDirectory, "train.jsonl"), `${train.map(JSON.stringify).join("\n")}\n`, "utf8"),
-  writeFile(resolve(outputDirectory, "eval.jsonl"), `${evaluation.map(JSON.stringify).join("\n")}\n`, "utf8"),
+  writeFile(resolve(outputDirectory, "train.jsonl"), `${completeTraining.map(JSON.stringify).join("\n")}\n`, "utf8"),
+  writeFile(resolve(outputDirectory, "eval.jsonl"), `${completeEvaluation.map(JSON.stringify).join("\n")}\n`, "utf8"),
 ]);
 
-process.stderr.write(`Wrote ${train.length} mock training rows and ${evaluation.length} evaluation rows to ${outputDirectory}\n`);
+process.stderr.write(`Wrote ${completeTraining.length} training rows (${realTraining.length} real semantic-only) and ${completeEvaluation.length} evaluation rows (${realEvaluation.length} real semantic-only) to ${outputDirectory}\n`);

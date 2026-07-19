@@ -3,7 +3,6 @@ import { FallbackSemanticAnalyzer } from "./fallbackSemanticAnalyzer.js";
 import {
   FreesoloSemanticAnalyzer,
   type FreesoloAttemptFailure,
-  type FreesoloNormalization,
   type FreesoloSemanticAnalyzerOptions,
 } from "./freesoloSemanticAnalyzer.js";
 import type { SemanticAnalyzer, SemanticInput } from "./types.js";
@@ -12,7 +11,6 @@ export interface SemanticAnalyzerFactoryOptions {
   fetch?: typeof globalThis.fetch;
   onFallback?: (error: unknown, input: SemanticInput) => void;
   onAttemptFailure?: (event: FreesoloAttemptFailure) => void;
-  onNormalization?: (event: FreesoloNormalization) => void;
 }
 
 function optionalInteger(value: string | undefined, label: string): number | undefined {
@@ -45,7 +43,6 @@ export function createSemanticAnalyzerFromEnv(
     maxConcurrency: optionalInteger(environment.FREESOLO_MAX_CONCURRENCY, "FREESOLO_MAX_CONCURRENCY"),
     fetch: options.fetch,
     onAttemptFailure: options.onAttemptFailure,
-    onNormalization: options.onNormalization,
   };
   const primary = new FreesoloSemanticAnalyzer(freesoloOptions);
   const fallbackMode = (environment.ENGINEERING_MEMORY_SEMANTIC_FALLBACK ?? "deterministic").trim().toLowerCase();

@@ -1,9 +1,10 @@
 import type { CommentIntent, ConventionDetection } from "@ht6/shared";
 import type { SemanticAnalysis, SemanticInput } from "./types.js";
 
-const TOP_LEVEL_KEYS = [
+const LEGACY_TOP_LEVEL_KEYS = [
   "intent", "title", "rule", "rationale", "prohibitedSignals", "preferredSignals", "detection",
 ] as const;
+const TOP_LEVEL_KEYS = ["intent", "title", "rule", "rationale", "detection"] as const;
 const DETECTION_KEYS = [
   "mode", "semanticDescription", "triggerSignals", "forbiddenSignals", "requiredSignals", "matchScope",
 ] as const;
@@ -17,16 +18,6 @@ export class SemanticAnalysisValidationError extends Error {
     super(`Invalid semantic analysis: ${message}`);
     this.name = "SemanticAnalysisValidationError";
   }
-}
-
-export interface SemanticAnalysisNormalization {
-  reason: "missing-required-preferred-signals";
-  originalPreferredSignals: string[];
-  normalizedPreferredSignals: string[];
-}
-
-export interface SemanticAnalysisValidationOptions {
-  onNormalization?: (normalization: SemanticAnalysisNormalization) => void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -55,10 +46,6 @@ function stringArray(value: unknown, label: string): string[] {
   return [...new Set(value.map((item) => item.trim()))];
 }
 
-function sameMembers(left: string[], right: string[]): boolean {
-  return left.length === right.length && left.every((item) => right.includes(item));
-}
-
 function evidenceText(input: SemanticInput, kind: "reviewed" | "accepted"): string {
   return kind === "reviewed"
     ? [input.rejectedCode, input.codeContext?.reviewedContext].filter(Boolean).join("\n")
@@ -71,6 +58,24 @@ function assertSignalsGrounded(signals: string[], evidence: string, label: strin
       throw new SemanticAnalysisValidationError(`${label} contains a signal absent from supplied code: ${JSON.stringify(signal)}`);
     }
   }
+}
+
+function signalsGrounded(signals: string[], evidence: string): boolean {
+  return signals.every((signal) => evidence.includes(signal));
+}
+
+function detectionViolates(detection: ConventionDetection, code: string): boolean {
+  const contextMatches = detection.triggerSignals.length === 0
+    || detection.triggerSignals.some((signal) => code.includes(signal));
+  if (!contextMatches) return false;
+  if (detection.mode === "forbidden-signal") {
+    return detection.forbiddenSignals.some((signal) => code.includes(signal));
+  }
+  if (detection.mode === "missing-required-signal") {
+    return detection.requiredSignals.length > 0
+      && !detection.requiredSignals.some((signal) => code.includes(signal));
+  }
+  return false;
 }
 
 function parseDetection(value: unknown): ConventionDetection {
@@ -93,11 +98,7 @@ function parseDetection(value: unknown): ConventionDetection {
 }
 
 /** Parses and grounds the model response before it can enter persistent engineering memory. */
-export function parseSemanticAnalysis(
-  responseText: string,
-  input: SemanticInput,
-  options: SemanticAnalysisValidationOptions = {},
-): SemanticAnalysis {
+export function parseSemanticAnalysis(responseText: string, input: SemanticInput): SemanticAnalysis {
   const text = responseText.trim();
   if (!text.startsWith("{") || !text.endsWith("}")) {
     throw new SemanticAnalysisValidationError("response must be raw JSON without Markdown or commentary");
@@ -109,51 +110,52 @@ export function parseSemanticAnalysis(
     throw new SemanticAnalysisValidationError("response is not valid JSON");
   }
   if (!isRecord(parsed)) throw new SemanticAnalysisValidationError("response must be an object");
-  assertExactKeys(parsed, TOP_LEVEL_KEYS, "top-level");
+  const keys = Object.keys(parsed).sort();
+  const v2Keys = [...TOP_LEVEL_KEYS].sort();
+  const legacyKeys = [...LEGACY_TOP_LEVEL_KEYS].sort();
+  if (JSON.stringify(keys) !== JSON.stringify(v2Keys) && JSON.stringify(keys) !== JSON.stringify(legacyKeys)) {
+    throw new SemanticAnalysisValidationError(`top-level keys must be exactly ${v2Keys.join(", ")}`);
+  }
 
   const intent = requiredString(parsed.intent, "intent");
   if (!INTENTS.has(intent as CommentIntent)) {
     throw new SemanticAnalysisValidationError(`unsupported intent ${JSON.stringify(intent)}`);
   }
-  const prohibitedSignals = stringArray(parsed.prohibitedSignals, "prohibitedSignals");
-  let preferredSignals = stringArray(parsed.preferredSignals, "preferredSignals");
-  const detection = parseDetection(parsed.detection);
-
-  if (detection.mode === "forbidden-signal") {
-    if (!detection.forbiddenSignals.length || detection.requiredSignals.length) {
-      throw new SemanticAnalysisValidationError("forbidden-signal requires forbiddenSignals and forbids requiredSignals");
-    }
-  } else if (detection.mode === "missing-required-signal") {
-    if (!detection.triggerSignals.length || !detection.requiredSignals.length || detection.forbiddenSignals.length) {
-      throw new SemanticAnalysisValidationError("missing-required-signal requires triggerSignals and requiredSignals only");
-    }
-    if (prohibitedSignals.length) {
-      throw new SemanticAnalysisValidationError(
-        `missing-required-signal requires empty prohibitedSignals; received ${JSON.stringify(prohibitedSignals)}`,
-      );
-    }
-    if (!sameMembers(preferredSignals, detection.requiredSignals)) {
-      options.onNormalization?.({
-        reason: "missing-required-preferred-signals",
-        originalPreferredSignals: preferredSignals,
-        normalizedPreferredSignals: detection.requiredSignals,
-      });
-      preferredSignals = [...detection.requiredSignals];
-    }
-  } else if (
-    detection.triggerSignals.length || detection.forbiddenSignals.length || detection.requiredSignals.length
-  ) {
-    throw new SemanticAnalysisValidationError("semantic detection cannot contain executable detection signals");
-  }
-
-  if (intent === "question-nonactionable" && (
-    detection.mode !== "semantic" || prohibitedSignals.length || preferredSignals.length
-  )) {
-    throw new SemanticAnalysisValidationError("question-nonactionable must be semantic and cannot contain preferred or prohibited signals");
-  }
-
+  let detection = parseDetection(parsed.detection);
   const reviewedEvidence = evidenceText(input, "reviewed");
   const acceptedEvidence = evidenceText(input, "accepted");
+
+  const coherent = detection.mode === "forbidden-signal"
+    ? detection.forbiddenSignals.length > 0 && detection.requiredSignals.length === 0
+    : detection.mode === "missing-required-signal"
+      ? detection.triggerSignals.length > 0 && detection.requiredSignals.length > 0
+        && detection.forbiddenSignals.length === 0 && Boolean(acceptedEvidence)
+      : detection.triggerSignals.length === 0 && detection.forbiddenSignals.length === 0
+        && detection.requiredSignals.length === 0;
+  const grounded = signalsGrounded(detection.triggerSignals, reviewedEvidence)
+    && signalsGrounded(detection.forbiddenSignals, reviewedEvidence)
+    && signalsGrounded(detection.requiredSignals, acceptedEvidence);
+  const behaviorallySafe = detection.mode === "semantic"
+    || (detectionViolates(detection, input.rejectedCode)
+      && (!input.acceptedCode || !detectionViolates(detection, input.acceptedCode)));
+
+  // Preserve useful semantic meaning while preventing malformed or invented executable signals
+  // from entering memory. Legacy top-level signal fields are deliberately ignored and derived.
+  if (!coherent || !grounded || !behaviorallySafe || intent === "question-nonactionable") {
+    detection = {
+      mode: "semantic",
+      semanticDescription: detection.semanticDescription,
+      triggerSignals: [],
+      forbiddenSignals: [],
+      requiredSignals: [],
+      matchScope: detection.matchScope,
+    };
+  }
+
+  const prohibitedSignals = detection.mode === "forbidden-signal" ? detection.forbiddenSignals : [];
+  const preferredSignals = detection.mode === "missing-required-signal" ? detection.requiredSignals : [];
+
+  // Defense in depth after canonicalization.
   assertSignalsGrounded(prohibitedSignals, reviewedEvidence, "prohibitedSignals");
   assertSignalsGrounded(detection.triggerSignals, reviewedEvidence, "detection.triggerSignals");
   assertSignalsGrounded(detection.forbiddenSignals, reviewedEvidence, "detection.forbiddenSignals");
