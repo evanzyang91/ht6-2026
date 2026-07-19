@@ -98,7 +98,7 @@ async function createConvention(
       languages: convention.languages,
       prohibitedSignals: convention.prohibitedSignals,
       preferredSignals: convention.preferredSignals,
-      detection: convention.detection as Prisma.InputJsonValue | undefined,
+      ...(convention.detection ? { detection: convention.detection as unknown as Prisma.InputJsonValue } : {}),
       confidence: convention.confidence,
     },
     select: { id: true },

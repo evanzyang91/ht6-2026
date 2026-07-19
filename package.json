@@ -30,6 +30,8 @@
     "webhook-server": "npm run start --workspace=@ht6/webhook-server --",
     "vscode:build": "npm run build --workspace=engineering-memory-vscode",
     "freesolo:mock-data": "node scripts/generate-freesolo-mock-data.mjs",
+    "freesolo:build-dataset": "node scripts/generate-freesolo-mock-data.mjs",
+    "freesolo:evaluate": "node scripts/evaluate-freesolo-run.mjs",
     "freesolo:check-response": "node scripts/check-freesolo-response.mjs"
   },
   "devDependencies": {

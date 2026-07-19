@@ -75,20 +75,25 @@ function compileConventions(
         requiredSignals: [],
         matchScope: "file",
       };
-    const semanticProhibitedSignals = unique(cluster.flatMap(
-      (episode) => semantics.get(episode.id)?.prohibitedSignals ?? [],
-    ));
-    const semanticPreferredSignals = unique(cluster.flatMap(
-      (episode) => semantics.get(episode.id)?.preferredSignals ?? [],
-    ));
-    const prohibitedSignals = explicitDetections.length
-      ? detection.mode === "semantic" ? semanticProhibitedSignals : detection.forbiddenSignals
-      : legacyProhibitedSignals;
-    const preferredSignals = explicitDetections.length
-      ? detection.mode === "missing-required-signal"
+    const compatibleSemantics = representativeDetection
+      ? cluster.flatMap((episode) => {
+        const semantic = semantics.get(episode.id);
+        return semantic?.detection?.mode === representativeDetection.mode
+          && semantic.detection.matchScope === representativeDetection.matchScope ? [semantic] : [];
+      })
+      : [];
+    const prohibitedSignals = !representativeDetection
+      ? legacyProhibitedSignals
+      : detection.mode === "forbidden-signal"
+        ? detection.forbiddenSignals
+        : detection.mode === "semantic"
+          ? unique(compatibleSemantics.flatMap((semantic) => semantic.prohibitedSignals))
+          : [];
+    const preferredSignals = !representativeDetection
+      ? legacyPreferredSignals
+      : detection.mode === "missing-required-signal"
         ? detection.requiredSignals
-        : semanticPreferredSignals
-      : legacyPreferredSignals;
+        : unique(compatibleSemantics.flatMap((semantic) => semantic.preferredSignals));
     const distinctPrs = new Set(cluster.map((episode) => episode.pullRequest)).size;
     const acceptedCount = cluster.filter((episode) => episode.acceptedCode).length;
     const linkage = cluster.reduce(

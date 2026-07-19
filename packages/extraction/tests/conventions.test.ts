@@ -149,4 +149,70 @@ describe("engineering-memory extraction", () => {
       detection: { mode: "semantic", matchScope: "line" },
     });
   });
+
+  it("keeps missing-required convention fields canonical", () => {
+    const value = episode(
+      "feature-flag",
+      310,
+      "New public endpoints must be guarded by a feature flag.",
+      "router.get('/reports', reportsController)",
+      "router.get('/reports', requireFeature('reports'), reportsController)",
+    );
+    value.semanticAnalysis = {
+      provider: "freesolo",
+      version: "v2",
+      intent: "architecture",
+      title: "Feature-flag public endpoints",
+      rule: "New public endpoints require a feature flag.",
+      rationale: "The accepted route adds the missing feature gate.",
+      prohibitedSignals: [],
+      preferredSignals: ["requireFeature"],
+      detection: {
+        mode: "missing-required-signal",
+        semanticDescription: "A public endpoint is registered without its feature gate.",
+        triggerSignals: ["reportsController"],
+        forbiddenSignals: [],
+        requiredSignals: ["requireFeature"],
+        matchScope: "line",
+      },
+    };
+
+    const [convention] = buildConventions([value]);
+    expect(convention.prohibitedSignals).toEqual([]);
+    expect(convention.preferredSignals).toEqual(["requireFeature"]);
+    expect(convention.detection).toEqual(value.semanticAnalysis.detection);
+  });
+
+  it("preserves descriptive signals for semantic-only conventions", () => {
+    const value = episode(
+      "boolean-name",
+      145,
+      "Rename loading to isLoading.",
+      "const loading = query.status === 'loading'",
+      "const isLoading = query.status === 'loading'",
+    );
+    value.semanticAnalysis = {
+      provider: "freesolo",
+      version: "v2",
+      intent: "style",
+      title: "Name booleans as predicates",
+      rule: "Boolean variables should use predicate-style names.",
+      rationale: "The accepted code uses isLoading.",
+      prohibitedSignals: ["loading"],
+      preferredSignals: ["isLoading"],
+      detection: {
+        mode: "semantic",
+        semanticDescription: "A boolean name is not predicate-style.",
+        triggerSignals: [],
+        forbiddenSignals: [],
+        requiredSignals: [],
+        matchScope: "line",
+      },
+    };
+
+    const [convention] = buildConventions([value]);
+    expect(convention.prohibitedSignals).toEqual(["loading"]);
+    expect(convention.preferredSignals).toEqual(["isLoading"]);
+    expect(convention.detection?.mode).toBe("semantic");
+  });
 });

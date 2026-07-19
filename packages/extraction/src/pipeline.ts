@@ -106,13 +106,6 @@ export async function runConfiguredExtraction(
         + `${willRetry ? "retrying" : "no retries remain"}: ${errorChain(error)}\n`,
       );
     },
-    onNormalization: ({ input, originalPreferredSignals, normalizedPreferredSignals }) => {
-      process.stderr.write(
-        `Freesolo normalized missing-required signals for ${episodeLabel(input)}; `
-        + `preferredSignals=${JSON.stringify(originalPreferredSignals)} -> `
-        + `${JSON.stringify(normalizedPreferredSignals)} from detection.requiredSignals\n`,
-      );
-    },
     onFallback: (error, input) => {
       process.stderr.write(
         `Freesolo fallback for ${episodeLabel(input)}; using deterministic analysis: ${errorChain(error)}\n`,
