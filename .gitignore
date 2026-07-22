@@ -3,8 +3,9 @@ dist/
 *.tsbuildinfo
 
 # Interchange data between pipeline stages — regenerate via `npm run ingest` / `npm run extract`.
-data/*
-!data/.gitkeep
+# (**/ so this also covers per-package data/ dirs, e.g. packages/api-server/data/)
+**/data/*
+!**/data/.gitkeep
 
 .env
 .env.local
