@@ -138,12 +138,14 @@ export function synthesizeContextualRule(input: SemanticInput): string {
   if (removed && added) return `${subject} should use \`${added}\` instead of \`${removed}\` for this operation.`;
   if (added) return `${subject} must apply \`${added}\` when performing this operation.`;
   if (removed) return `${subject} must not use \`${removed}\` for this operation.`;
-  if (/\?\s*$/.test(input.reviewComment)) {
-    return `${subject} has no established convention for this behavior; an explicit repository decision is required before enforcement.`;
-  }
+  // Comments phrased as a question (no code signal removed/added) still reach here as real,
+  // actionable conventions — classifyIntent already filters genuinely non-actionable questions
+  // out before clustering, so a question that survived to a published, supported convention has
+  // real content worth surfacing. Paraphrase it below instead of punting to a placeholder that
+  // hides what the reviewer actually asked.
   const comment = input.reviewComment
     .replace(/^\s*(nit|suggestion|question|blocking|issue)\s*:\s*/i, "")
-    .replace(/^\s*(please|could we|can we|would we|should we)\s+/i, "")
+    .replace(/^\s*(please|could we|can we|would we|should we|should)\s+/i, "")
     .replace(/\?+\s*$/, "")
     .replace(/\b(this|here|it)\b/gi, "the reviewed implementation")
     .replace(/\s+/g, " ")

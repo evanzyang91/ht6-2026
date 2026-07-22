@@ -77,7 +77,7 @@ describe("GeminiSemanticAnalyzer", () => {
 
     expect(analyzer).toMatchObject({
       provider: "gemini-with-deterministic-fallback",
-      version: "gemini-2.5-flash|1",
+      version: "gemini-2.5-flash|3",
     });
     await expect(analyzer.analyze(input)).resolves.toMatchObject({ intent: "security" });
     expect(fetchMock).toHaveBeenCalledTimes(2);

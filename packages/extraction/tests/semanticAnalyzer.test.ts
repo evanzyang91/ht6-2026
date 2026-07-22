@@ -53,7 +53,11 @@ describe("DeterministicSemanticAnalyzer", () => {
     expect(analysis.rule).not.toMatch(/[?]$/);
   });
 
-  it("represents unknown unresolved questions conservatively without copying them", async () => {
+  it("paraphrases a question-phrased comment into an actionable rule instead of a placeholder", async () => {
+    // classifyIntent already drops genuinely non-actionable questions before an episode ever
+    // reaches clustering — a question that survived to here (analyzer.analyze is only called on
+    // real episodes) has real content, so it should be paraphrased like any other comment, not
+    // replaced with a generic "no established convention" placeholder that hides what was asked.
     const analyzer = new DeterministicSemanticAnalyzer();
     const reviewComment = "Should widgets remain visible after archival, or disappear immediately?";
     const analysis = await analyzer.analyze({
@@ -66,7 +70,9 @@ describe("DeterministicSemanticAnalyzer", () => {
     });
 
     expect(analysis.rule).not.toBe(reviewComment);
-    expect(analysis.rule).toContain("explicit repository decision");
+    expect(analysis.rule).not.toContain("explicit repository decision");
+    expect(analysis.rule).not.toContain("should should");
+    expect(analysis.rule).toBe("Repository code should widgets remain visible after archival, or disappear immediately.");
     expect(analysis.rule).not.toMatch(/[?]$/);
   });
 });
